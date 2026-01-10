@@ -1,0 +1,23 @@
+# Reddit Startup Idea Scraper - Dependencies
+# Install with: pip install -r requirements.txt
+
+# Reddit API Wrapper
+praw>=7.7.0
+
+# Google Generative AI (Gemini API)
+google-generativeai>=0.8.0
+
+# Environment Variable Management
+python-dotenv>=1.0.0
+
+# Data Handling
+pandas>=2.0.0
+
+# Progress Bars
+tqdm>=4.65.0
+
+# HTTP Requests (for future extensions)
+requests>=2.31.0
+
+# Retry Logic for API Calls
+tenacity>=8.2.0
