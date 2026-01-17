@@ -1,0 +1,64 @@
+# Reddit Startup Idea Scraper - Dependencies
+# Install with: pip install -r requirements.txt
+
+# ============================================================================
+# FREE AI BACKENDS
+# ============================================================================
+
+# Groq API (Free cloud AI - very fast, generous free tier!)
+# Get API key: https://console.groq.com/
+groq>=0.4.0
+
+# Google Generative AI (Gemini API - paid but reliable)
+google-generativeai>=0.8.0
+
+# ============================================================================
+# CORE DEPENDENCIES
+# ============================================================================
+
+# Environment Variable Management
+python-dotenv>=1.0.0
+
+# Data Handling
+pandas>=2.0.0
+
+# Progress Bars
+tqdm>=4.65.0
+
+# HTTP Requests (for Reddit JSON API)
+requests>=2.31.0
+
+# Retry Logic for API Calls
+tenacity>=8.2.0
+
+# ============================================================================
+# OPTIONAL DEPENDENCIES
+# ============================================================================
+
+# For enhanced console output (rich tables, progress bars)
+# Install with: pip install rich
+# rich>=13.0.0
+
+# ============================================================================
+# STANDARD LIBRARY (No pip install needed)
+# ============================================================================
+# - csv: Built-in
+# - json: Built-in
+# - logging: Built-in
+# - argparse: Built-in
+# - dataclasses: Built-in (Python 3.7+)
+# - typing: Built-in (Python 3.5+)
+# - datetime: Built-in
+# - time: Built-in
+# - random: Built-in
+# - pathlib: Built-in (Python 3.4+)
+# - urllib: Built-in
+# - ssl: Built-in
+
+# ============================================================================
+# LOCAL AI (OLLAMA)
+# ============================================================================
+# No pip package needed for Ollama!
+# Install Ollama from: https://ollama.com/
+# Then run: ollama serve
+# Then pull a model: ollama pull llama3.2
