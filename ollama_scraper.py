@@ -33,9 +33,8 @@ os.environ["OLLAMA_GPU"] = "true"
 
 # --- Configuration ---
 REDDIT_BASE_URL = "https://www.reddit.com/r/{subreddit}/new.json"
-OLLAMA_API_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434") + "/api/generate"
-# Use lighter model by default as requested
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+OLLAMA_API_URL = "http://localhost:11435/api/generate"
+OLLAMA_MODEL = "llama3.2:3b"  # Best for your GPU
 
 SUBREDDITS = os.getenv("TARGET_SUBREDDITS", "Entrepreneur,SaaS,SideProject,smallbusiness,startups").split(",")
 
@@ -393,7 +392,7 @@ def main() -> None:
     min_comments = int(os.getenv("MIN_COMMENTS", "3"))
 
     scraper = RedditScraper()
-    analyzer = OllamaAnalyzer()
+    analyzer = AIAnalyzer()
 
     all_valid_posts = []
 
