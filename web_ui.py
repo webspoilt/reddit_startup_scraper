@@ -37,6 +37,9 @@ scraper_logs = []
 # Get default subreddits from env
 DEFAULT_SUBREDDITS = os.getenv("TARGET_SUBREDDITS", "Entrepreneur,SaaS,SideProject,smallbusiness,startups")
 
+# Groq API Key
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -209,7 +212,15 @@ HTML_TEMPLATE = """
                     <p class="helper-text">Default: {{ default_subs[:60] }}...</p>
                 </div>
                 <div class="form-group">
-                    <label>Ollama Model</label>
+                    <label>AI Provider</label>
+                    <select id="provider" onchange="updateModels()">
+                        <option value="ollama">Ollama (Local - Free)</option>
+                        <option value="groq" {{ 'selected' if groq_available else '' }}>Groq Cloud (Fast - Free)</option>
+                    </select>
+                    <p class="helper-text" id="providerHelp">Ollama runs locally. Groq is 5x faster but needs API key.</p>
+                </div>
+                <div class="form-group">
+                    <label>Model</label>
                     <select id="model">
                         <option value="llama3.2:3b">llama3.2:3b (Recommended)</option>
                         <option value="deepseek-coder:6.7b">deepseek-coder:6.7b</option>
@@ -270,25 +281,47 @@ HTML_TEMPLATE = """
             document.getElementById('tab-' + tab).classList.add('active');
         }
         
+        function updateModels() {
+            const provider = document.getElementById('provider').value;
+            const modelSelect = document.getElementById('model');
+            const helpText = document.getElementById('providerHelp');
+            
+            if (provider === 'groq') {
+                modelSelect.innerHTML = `
+                    <option value="llama-3.3-70b-versatile">llama-3.3-70b (Best)</option>
+                    <option value="llama-3.1-8b-instant">llama-3.1-8b (Fast)</option>
+                    <option value="mixtral-8x7b-32768">mixtral-8x7b (Good)</option>
+                `;
+                helpText.textContent = 'Groq: 5x faster, works on cloud hosting, FREE tier available.';
+            } else {
+                modelSelect.innerHTML = `
+                    <option value="llama3.2:3b">llama3.2:3b (Recommended)</option>
+                    <option value="deepseek-coder:6.7b">deepseek-coder:6.7b</option>
+                    <option value="llama3.2:1b">llama3.2:1b (Fast)</option>
+                `;
+                helpText.textContent = 'Ollama runs locally. No internet needed, 100% private.';
+            }
+        }
+        
         async function startScraper() {
             let subreddits = document.getElementById('subreddits').value.trim();
-            // If empty, use defaults
             if (!subreddits) {
                 subreddits = '{{ default_subs }}';
             }
             
+            const provider = document.getElementById('provider').value;
             const model = document.getElementById('model').value;
             const limit = document.getElementById('limit').value;
             const minComments = document.getElementById('minComments').value;
             
             document.getElementById('startBtn').disabled = true;
             document.getElementById('stopBtn').disabled = false;
-            document.getElementById('logBox').innerHTML = '<p>Starting scraper...</p>';
+            document.getElementById('logBox').innerHTML = '<p>Starting scraper with ' + provider.toUpperCase() + '...</p>';
             
             const response = await fetch('/start', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({subreddits, model, limit, minComments})
+                body: JSON.stringify({subreddits, provider, model, limit, minComments})
             });
             
             const data = await response.json();
@@ -476,7 +509,8 @@ def logout():
 def index():
     global scraper_running
     status = "Running" if scraper_running else "Stopped"
-    return render_template_string(HTML_TEMPLATE, status=status, default_subs=DEFAULT_SUBREDDITS)
+    groq_available = bool(GROQ_API_KEY)
+    return render_template_string(HTML_TEMPLATE, status=status, default_subs=DEFAULT_SUBREDDITS, groq_available=groq_available)
 
 
 @app.route('/start', methods=['POST'])
@@ -570,32 +604,30 @@ def get_logs():
 @app.route('/analyze-single', methods=['POST'])
 @login_required
 def analyze_single():
-    """Analyze a single Reddit post URL."""
+    """Analyze a single Reddit post URL using Ollama or Groq."""
     import requests as req
     
     data = request.json
     url = data.get('url', '')
+    provider = data.get('provider', 'ollama')
     
-    # Extract post data from Reddit
     try:
-        # Convert to JSON URL
-        if 'reddit.com' in url:
-            json_url = url.rstrip('/') + '.json'
-            headers = {'User-Agent': 'StartupScraper/1.0'}
-            response = req.get(json_url, headers=headers, timeout=10)
-            
-            if response.status_code != 200:
-                return jsonify({'success': False, 'error': 'Could not fetch Reddit post'})
-            
-            post_data = response.json()[0]['data']['children'][0]['data']
-            title = post_data.get('title', '')
-            body = post_data.get('selftext', '')[:1000]
-            
-            # Analyze with Ollama
-            ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434") + "/api/generate"
-            model = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
-            
-            prompt = f"""You are a startup analyst specializing in finding opportunities for the Indian market. Analyze this Reddit post and return ONLY a valid JSON object.
+        if 'reddit.com' not in url:
+            return jsonify({'success': False, 'error': 'Invalid Reddit URL'})
+        
+        # Fetch Reddit post
+        json_url = url.rstrip('/') + '.json'
+        headers = {'User-Agent': 'StartupScraper/1.0'}
+        response = req.get(json_url, headers=headers, timeout=10)
+        
+        if response.status_code != 200:
+            return jsonify({'success': False, 'error': 'Could not fetch Reddit post'})
+        
+        post_data = response.json()[0]['data']['children'][0]['data']
+        title = post_data.get('title', '')
+        body = post_data.get('selftext', '')[:1000]
+        
+        prompt = f"""You are a startup analyst specializing in finding opportunities for the Indian market. Analyze this Reddit post and return ONLY a valid JSON object.
 
 Title: {title}
 Body: {body}
@@ -613,6 +645,34 @@ Return JSON:
   "competition_india": "Low/Medium/High",
   "difficulty": 1-10
 }}"""
+        
+        result_text = ""
+        
+        # Use Groq if API key is available and selected
+        if GROQ_API_KEY and provider == 'groq':
+            groq_response = req.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 1000,
+                    "temperature": 0.7
+                },
+                timeout=60
+            )
+            
+            if groq_response.status_code == 200:
+                result_text = groq_response.json()['choices'][0]['message']['content']
+            else:
+                return jsonify({'success': False, 'error': f'Groq error: {groq_response.status_code}'})
+        else:
+            # Use Ollama
+            ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434") + "/api/generate"
+            model = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
             
             ollama_response = req.post(ollama_url, json={
                 "model": model,
@@ -622,16 +682,17 @@ Return JSON:
             
             if ollama_response.status_code == 200:
                 result_text = ollama_response.json().get('response', '')
-                # Extract JSON
-                match = re.search(r'\{.*\}', result_text, re.DOTALL)
-                if match:
-                    result = json.loads(match.group(0))
-                    return jsonify({'success': True, 'result': result})
-            
-            return jsonify({'success': False, 'error': 'Ollama analysis failed'})
-        else:
-            return jsonify({'success': False, 'error': 'Invalid Reddit URL'})
-            
+            else:
+                return jsonify({'success': False, 'error': 'Ollama not running. Start with: ollama serve'})
+        
+        # Extract JSON from response
+        match = re.search(r'\{.*\}', result_text, re.DOTALL)
+        if match:
+            result = json.loads(match.group(0))
+            return jsonify({'success': True, 'result': result})
+        
+        return jsonify({'success': False, 'error': 'Could not parse AI response'})
+        
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
