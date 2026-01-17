@@ -28,10 +28,14 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Force GPU usage for Ollama
+os.environ["OLLAMA_GPU"] = "true"
+
 # --- Configuration ---
 REDDIT_BASE_URL = "https://www.reddit.com/r/{subreddit}/new.json"
 OLLAMA_API_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434") + "/api/generate"
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "deepseek-coder:6.7b")
+# Use lighter model by default as requested
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
 
 SUBREDDITS = os.getenv("TARGET_SUBREDDITS", "Entrepreneur,SaaS,SideProject,smallbusiness,startups").split(",")
 
