@@ -113,26 +113,33 @@ class RedditScraper:
         return filtered
 
 
-class OllamaAnalyzer:
-    """Analyzes text using local Ollama model."""
+class AIAnalyzer:
+    """Analyzes text using Groq Cloud API or local Ollama model."""
 
     def __init__(self):
-        self.url = OLLAMA_API_URL
-        self.model = OLLAMA_MODEL
+        # Configuration
+        self.provider = os.getenv("AI_PROVIDER", "ollama").lower()
+        self.groq_key = os.getenv("GROQ_API_KEY", "")
+        
+        # Groq Settings
+        self.groq_url = "https://api.groq.com/openai/v1/chat/completions"
+        self.groq_model = "llama-3.3-70b-versatile"
+        
+        # Ollama Settings
+        self.ollama_url = OLLAMA_API_URL
+        self.ollama_model = OLLAMA_MODEL
 
     def _extract_json(self, text: str) -> Optional[Dict[str, Any]]:
         try:
             return json.loads(text)
         except json.JSONDecodeError:
             pass
-
         match = re.search(r'\{.*\}', text, re.DOTALL)
         if match:
             try:
                 return json.loads(match.group(0))
             except json.JSONDecodeError:
                 pass
-
         return None
 
     def analyze_post(self, post: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -161,54 +168,67 @@ JSON Format:
   "competition_india": "Low/Medium/High",
   "risks": ["risk1", "risk2"]
 }}"""
+        
+        # Try Groq first if enabled or in smart mode
+        if self.groq_key and (self.provider == 'groq' or self.provider == 'smart'):
+            try:
+                print(f"Analyzing with Groq: '{post['title'][:40]}...'")
+                result = self._call_groq(prompt)
+                if result: return self._format_result(post, result)
+            except Exception as e:
+                print(f" -> Groq failed ({e}). Falling back to Ollama...")
+        
+        # Fallback to Ollama
+        try:
+            print(f"Analyzing with Ollama ({self.ollama_model}): '{post['title'][:40]}...'")
+            result = self._call_ollama(prompt)
+            if result: return self._format_result(post, result)
+        except Exception as e:
+            print(f" -> Ollama analysis error: {e}")
+            
+        return None
 
+    def _call_groq(self, prompt: str) -> Optional[Dict[str, Any]]:
         payload = {
-            "model": self.model,
+            "model": self.groq_model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 1000,
+            "temperature": 0.7
+        }
+        response = requests.post(
+            self.groq_url, 
+            headers={"Authorization": f"Bearer {self.groq_key}", "Content-Type": "application/json"},
+            json=payload, timeout=30
+        )
+        if response.status_code == 200:
+            content = response.json()['choices'][0]['message']['content']
+            return self._extract_json(content)
+        elif response.status_code == 429:
+            raise Exception("Groq Rate Limit Exceeded")
+        else:
+            raise Exception(f"Groq Error {response.status_code}")
+
+    def _call_ollama(self, prompt: str) -> Optional[Dict[str, Any]]:
+        payload = {
+            "model": self.ollama_model,
             "prompt": prompt,
             "stream": False,
-            "options": {
-                "temperature": 0.7,
-                "num_predict": 800,
-            }
+            "options": {"temperature": 0.7, "num_predict": 800}
         }
-
-        try:
-            print(f"Analyzing: '{post['title'][:40]}...'...")
-            # Increased timeout for larger models like deepseek
-            response = requests.post(self.url, json=payload, timeout=120)
-
-            if response.status_code == 200:
-                result = response.json()
-                response_text = result.get("response", "")
-                response_text = response_text.replace("```json", "").replace("```", "").strip()
-
-                analysis = self._extract_json(response_text)
-                if analysis:
-                    return {
-                        "title": post['title'],
-                        "url": post['url'],
-                        "num_comments": post['num_comments'],
-                        "ups": post['ups'],
-                        **analysis
-                    }
-                else:
-                    print(" -> Failed to parse JSON response.")
-            elif response.status_code == 404:
-                print(f" -> Model '{self.model}' not found. Run: ollama pull {self.model}")
-            elif response.status_code == 500:
-                print(" -> Ollama server error. Try again later.")
-            else:
-                print(f" -> Ollama Error: {response.status_code}")
-
-        except requests.exceptions.ConnectionError:
-            print(f"Error: Could not connect to Ollama at {self.url}")
-            print("Is Ollama running? Try: ollama serve")
-        except requests.exceptions.Timeout:
-            print(" -> Ollama request timed out (model may be loading).")
-        except Exception as e:
-            print(f" -> Analysis error: {e}")
-
+        response = requests.post(self.ollama_url, json=payload, timeout=120)
+        if response.status_code == 200:
+            content = response.json().get("response", "")
+            return self._extract_json(content)
         return None
+
+    def _format_result(self, post: Dict[str, Any], analysis: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "title": post['title'],
+            "url": post['url'],
+            "num_comments": post['num_comments'],
+            "ups": post['ups'],
+            **analysis
+        }
 
 
 def save_to_csv(results: List[Dict[str, Any]], filename: str = "startup_ideas.csv") -> None:

@@ -214,10 +214,12 @@ HTML_TEMPLATE = """
                 <div class="form-group">
                     <label>AI Provider</label>
                     <select id="provider" onchange="updateModels()">
-                        <option value="ollama">Ollama (Local - Free)</option>
-                        <option value="groq" {{ 'selected' if groq_available else '' }}>Groq Cloud (Fast - Free)</option>
+                        <option value="smart" selected>Smart Mode (Groq -> Ollama)</option>
+                        <option value="groq">Groq Cloud (Fast)</option>
+                        <option value="ollama">Ollama (Local)</option>
+                        
                     </select>
-                    <p class="helper-text" id="providerHelp">Ollama runs locally. Groq is 5x faster but needs API key.</p>
+                    <p class="helper-text" id="providerHelp">Smart Mode: Tries Groq (fast). If it fails/limits, auto-switches to Ollama (free).</p>
                 </div>
                 <div class="form-group">
                     <label>Model</label>
@@ -293,7 +295,19 @@ HTML_TEMPLATE = """
                     <option value="mixtral-8x7b-32768">mixtral-8x7b (Good)</option>
                 `;
                 helpText.textContent = 'Groq: 5x faster, works on cloud hosting, FREE tier available.';
+            } else if (provider === 'smart') {
+                modelSelect.innerHTML = `
+                    <option value="auto">Auto-Select (Groq: Llama3-70b -> Ollama: Configured)</option>
+                `;
+                helpText.textContent = 'Smart Mode: Tries Graq (Fast/Best). If it fails/limits, auto-switches to local Ollama.';
             } else {
+                modelSelect.innerHTML = `
+                    <option value="llama3.2:3b">llama3.2:3b (Recommended)</option>
+                    <option value="deepseek-coder:6.7b">deepseek-coder:6.7b</option>
+                    <option value="llama3.2:1b">llama3.2:1b (Fast)</option>
+                `;
+                helpText.textContent = 'Ollama runs locally. No internet needed, 100% private.';
+            }
                 modelSelect.innerHTML = `
                     <option value="llama3.2:3b">llama3.2:3b (Recommended)</option>
                     <option value="deepseek-coder:6.7b">deepseek-coder:6.7b</option>
@@ -526,11 +540,13 @@ def start_scraper():
     model = data.get('model', 'llama3.2:3b')
     limit = data.get('limit', '10')
     min_comments = data.get('minComments', '3')
+    provider = data.get('provider', 'ollama')
     
     os.environ['TARGET_SUBREDDITS'] = subreddits
     os.environ['OLLAMA_MODEL'] = model
     os.environ['POST_LIMIT'] = str(limit)
     os.environ['MIN_COMMENTS'] = str(min_comments)
+    os.environ['AI_PROVIDER'] = provider
     
     scraper_logs = []
     scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Starting scraper...")
