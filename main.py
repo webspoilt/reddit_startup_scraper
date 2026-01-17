@@ -259,7 +259,8 @@ def analyze_with_ai(processed_posts: List[Dict[str, Any]],
         return []
 
     # Get analyzer using factory
-    provider_pref = getattr(config_instance, 'ai_provider', None)
+    # Use the smart property from config
+    provider_pref = config_instance.ai_provider
     analyzer = get_analyzer(config=config_instance, provider=provider_pref)
 
     if not analyzer:
@@ -268,8 +269,19 @@ def analyze_with_ai(processed_posts: List[Dict[str, Any]],
 
     # Get analyzer info
     model_name = getattr(analyzer, 'model_name', 'unknown')
-    print(f"Analyzing {len(processed_posts)} posts with AI...")
+    
+    # Provider display info
+    is_cloud = provider_pref == "groq"
+    mode_str = "Cloud API" if is_cloud else "Local Model"
+    if provider_pref == "keyword": mode_str = "Rule-based"
+
+    print(f"Analyzing {len(processed_posts)} posts with {provider_pref.upper()}...")
     print(f"  Model: {model_name}")
+    print(f"  Mode: {mode_str}")
+    if config_instance.is_hosted:
+        print(f"  Environment: Hosted (Render/Cloud)")
+    else:
+        print(f"  Environment: Local")
 
     analyzed_posts = []
     total = len(processed_posts)

@@ -1,6 +1,26 @@
 # Reddit Startup Idea Scraper
 
-A powerful Python tool that automatically discovers Micro-SaaS and startup opportunities by analyzing pain points and discussions on Reddit. Supports **local AI (Ollama)** and **cloud APIs (Gemini, Groq)**.
+A powerful tool to scrape Reddit for startup problems, validate ideas with AI, and export actionable insights.
+Now supports **Smart Hybrid Hosting**: Automatically switches between local Ollama (free/private) and cloud Groq (fast/hosted) based on the environment!
+
+## 🚀 Features
+
+- **Smart Hybrid AI**: Auto-detects environment. Uses Ollama locally, Groq on the cloud.
+- **Multi-AI Support**: Use Ollama (local), Groq (free), or Gemini
+- **No API Keys Required**: Use Ollama for 100% free local AI analysis
+- **Automated Scraping**: Fetches posts from multiple subreddits
+- **Problem Detection**: Identifies genuine pain points using keyword matching
+- **AI Analysis**: Generates startup ideas, pricing, and validation steps
+- **Multiple Outputs**: CSV, JSON, and TXT reports
+- **Web UI**: Password-protected dashboard for easy use.
+
+## 📦 Deployment (Render/Heroku/Vercel)
+This app is "Cloud Ready". Just deploy it and set the environment variables:
+1. **HOSTED_ENVIRONMENT**: `true`
+2. **GROQ_API_KEY**: Your free key from [Groq Console](https://console.groq.com)
+3. **UI_PASSWORD**: Set a password for the web interface.
+
+The app will automatically disable local Ollama and use Groq for AI analysis.
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)

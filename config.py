@@ -231,9 +231,13 @@ class Config:
     def ai_provider(self) -> str:
         """
         AI provider selection with auto-fallback for hosting.
-        Priority: Hosted mode -> Groq -> Ollama -> Keyword fallback
+        Priority: CLI arg -> Env Var -> Hosted mode -> Groq -> Ollama -> Keyword fallback
         """
-        # Explicit override
+        # Internal override (CLI arg)
+        if hasattr(self, '_ai_provider') and self._ai_provider:
+             return self._ai_provider
+
+        # Explicit environment override
         provider = os.getenv("AI_PROVIDER", "").lower()
         if provider in ("groq", "ollama", "keyword"):
             return provider
@@ -248,8 +252,6 @@ class Config:
                 return "keyword"
         else:
             # Local mode: prefer Ollama if available (to save Groq limits), else Groq
-            # Note: We prioritize Ollama locally if use_ollama was historically set to true
-            # but for this smart logic, let's prioritize Ollama availability
             if self._is_ollama_remote():
                return "ollama" 
             elif self.groq_api_key:
