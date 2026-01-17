@@ -224,7 +224,7 @@ def save_to_csv(results: List[Dict[str, Any]], filename: str = "startup_ideas.cs
                     "Source URL": r.get('url', '')
                 })
 
-        print(f"✓ Excel-compatible CSV saved to: {filename}")
+        print(f"[OK] Excel-compatible CSV saved to: {filename}")
 
     except IOError as e:
         print(f"Error saving CSV: {e}")
@@ -267,7 +267,7 @@ def save_to_txt(results: List[Dict[str, Any]], filename: str = "startup_ideas_re
                 f.write(f"Source:      {r.get('url', '')}\n")
                 f.write("\n" + "=" * 80 + "\n\n")
 
-        print(f"✓ Text Report saved to: {filename}")
+        print(f"[OK] Text Report saved to: {filename}")
 
     except IOError as e:
         print(f"Error saving TXT: {e}")
@@ -328,7 +328,7 @@ def main() -> None:
 
     # List available models
     models = list_ollama_models()
-    print(f"\n✓ Connected to Ollama")
+    print(f"\n[OK] Connected to Ollama")
     print(f"Available models: {', '.join(models) if models else 'None found'}")
     print(f"Using model: {OLLAMA_MODEL}")
     
@@ -376,14 +376,14 @@ def main() -> None:
     
     # Get dated output folder
     output_dir = get_output_folder()
-    print(f"📁 Saving to: {output_dir}")
+    print(f"[FOLDER] Saving to: {output_dir}")
 
     # 1. Save JSON
     json_file = os.path.join(output_dir, "startup_ideas.json")
     try:
         with open(json_file, "w", encoding="utf-8") as f:
             json.dump(final_results, f, indent=2, ensure_ascii=False)
-        print(f"✓ Saved JSON to {json_file}")
+        print(f"[OK] Saved JSON to {json_file}")
     except IOError as e:
         print(f"Error saving JSON: {e}")
 
@@ -396,12 +396,12 @@ def main() -> None:
     # 4. Console Summary
     print("\n--- Top Ideas Summary ---")
     for idea in final_results[:5]:
-        print(f"\n💡 Idea: {idea.get('startup_idea', 'N/A')}")
+        print(f"\n[IDEA] {idea.get('startup_idea', 'N/A')}")
         print(f"   Problem: {idea.get('problem', 'N/A')}")
         print(f"   Revenue: {idea.get('revenue_potential', 'N/A')} | Difficulty: {idea.get('difficulty', 'N/A')}/10")
 
     print("\n" + "=" * 60)
-    print(f"✅ Scan complete! Data saved to: {output_dir}")
+    print(f"[DONE] Scan complete! Data saved to: {output_dir}")
     print("=" * 60)
 
 
