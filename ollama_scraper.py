@@ -36,10 +36,22 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "deepseek-coder:6.7b")
 SUBREDDITS = os.getenv("TARGET_SUBREDDITS", "Entrepreneur,SaaS,SideProject,smallbusiness,startups").split(",")
 
 KEYWORDS = [
+    # Pain points
     "struggling with", "hate it when", "is there a tool",
     "wish there was", "frustrated with", "looking for",
     "anyone else", "how do you", "need help with",
-    "problem with", "tired of"
+    "problem with", "tired of", "annoying", "waste time",
+    # Solutions seeking
+    "recommend", "alternative to", "better than", "cheaper than",
+    "app for", "software for", "tool for", "service for",
+    # Trends & opportunities
+    "game changer", "trending", "booming", "growing fast",
+    "just launched", "new startup", "raised funding", "went viral",
+    # Lifestyle & productivity
+    "save time", "make money", "side hustle", "passive income",
+    "automate", "streamline", "simplify", "easier way",
+    # Market gaps
+    "doesn't exist", "no good option", "nothing works", "gap in market"
 ]
 
 HEADERS = {
@@ -124,20 +136,29 @@ class OllamaAnalyzer:
         return None
 
     def analyze_post(self, post: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        prompt = f"""You are a startup analyst. Analyze this Reddit post and return ONLY a valid JSON object (no markdown, no explanation):
+        prompt = f"""You are a startup analyst specializing in finding opportunities for the Indian market. Analyze this Reddit post (mostly from US users) and return ONLY a valid JSON object.
 
 Title: {post['title']}
 Body: {post['selftext'][:1000]}
 
+Consider:
+1. What problem are people facing?
+2. Is this solution available in India? If not, it's a market gap opportunity.
+3. Is this a trending topic in the US that hasn't reached India yet?
+
 JSON Format:
 {{
-  "problem": "one sentence",
-  "audience": "who faces this",
-  "startup_idea": "solution description",
-  "pricing": "suggested price",
+  "problem": "one sentence describing the pain point",
+  "audience": "who faces this problem",
+  "startup_idea": "solution that could work in India",
+  "us_trend": "is this trending in US? Yes/No",
+  "india_gap": "does this exist in India? Yes/No/Partial",
+  "india_opportunity": "why this could work in India",
+  "pricing_inr": "suggested price in INR for Indian market",
   "revenue_potential": "High/Medium/Low",
   "validation_steps": ["step1", "step2", "step3"],
   "difficulty": 1-10,
+  "competition_india": "Low/Medium/High",
   "risks": ["risk1", "risk2"]
 }}"""
 
@@ -198,7 +219,8 @@ def save_to_csv(results: List[Dict[str, Any]], filename: str = "startup_ideas.cs
 
     fieldnames = [
         "Title", "Problem", "Audience", "Startup Idea",
-        "Pricing", "Revenue Potential", "Difficulty (1-10)",
+        "US Trend", "India Gap", "India Opportunity", "Competition India",
+        "Pricing INR", "Revenue Potential", "Difficulty (1-10)",
         "Risks", "Validation Steps", "Source URL"
     ]
 
@@ -216,7 +238,11 @@ def save_to_csv(results: List[Dict[str, Any]], filename: str = "startup_ideas.cs
                     "Problem": r.get('problem', ''),
                     "Audience": r.get('audience', ''),
                     "Startup Idea": r.get('startup_idea', ''),
-                    "Pricing": r.get('pricing', ''),
+                    "US Trend": r.get('us_trend', ''),
+                    "India Gap": r.get('india_gap', ''),
+                    "India Opportunity": r.get('india_opportunity', ''),
+                    "Competition India": r.get('competition_india', ''),
+                    "Pricing INR": r.get('pricing_inr', ''),
                     "Revenue Potential": r.get('revenue_potential', ''),
                     "Difficulty (1-10)": r.get('difficulty', ''),
                     "Risks": risks_str,
