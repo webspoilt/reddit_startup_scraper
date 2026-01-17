@@ -191,20 +191,76 @@ class Config:
 
     # AI Provider Configuration
     @property
+    def is_hosted(self) -> bool:
+        """Check if running in hosted/production environment."""
+        hosted_flag = os.getenv("HOSTED_ENVIRONMENT", "false")
+        return hosted_flag.lower() in ("true", "1", "yes")
+
+    @property
     def groq_api_key(self) -> str:
         """Groq API key for free cloud inference."""
         return os.getenv("GROQ_API_KEY", "") or ""
 
     @property
+    def ollama_base_url(self) -> str:
+        """Base URL for Ollama API."""
+        return os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+
+    def _is_ollama_remote(self) -> bool:
+        """Check if Ollama is accessible remotely."""
+        import requests
+        try:
+            # Short timeout to not block startup
+            response = requests.get(
+                f"{self.ollama_base_url}/api/tags",
+                timeout=2
+            )
+            return response.status_code == 200
+        except Exception:
+            return False
+
+    @property
     def use_ollama(self) -> bool:
-        """Whether to use Ollama for local AI inference."""
-        value = os.getenv("USE_OLLAMA", "false")
-        return value.lower() in ("true", "1", "yes")
+        """
+        Legacy property for backward compatibility.
+        Returns true if the selected provider is ollama.
+        """
+        return self.ai_provider == "ollama"
+
+    @property
+    def ai_provider(self) -> str:
+        """
+        AI provider selection with auto-fallback for hosting.
+        Priority: Hosted mode -> Groq -> Ollama -> Keyword fallback
+        """
+        # Explicit override
+        provider = os.getenv("AI_PROVIDER", "").lower()
+        if provider in ("groq", "ollama", "keyword"):
+            return provider
+
+        if self.is_hosted:
+            # When hosted, prefer Groq for cloud accessibility
+            if self.groq_api_key:
+                return "groq"
+            elif self._is_ollama_remote():
+                return "ollama"
+            else:
+                return "keyword"
+        else:
+            # Local mode: prefer Ollama if available (to save Groq limits), else Groq
+            # Note: We prioritize Ollama locally if use_ollama was historically set to true
+            # but for this smart logic, let's prioritize Ollama availability
+            if self._is_ollama_remote():
+               return "ollama" 
+            elif self.groq_api_key:
+                return "groq"
+            else:
+                return "keyword"
 
     @property
     def ollama_model(self) -> str:
         """Ollama model to use for local inference."""
-        return os.getenv("OLLAMA_MODEL", "") or ""
+        return os.getenv("OLLAMA_MODEL", "llama3.2:3b")
 
     # Output Configuration
     @property
