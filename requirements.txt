@@ -31,6 +31,12 @@ requests>=2.31.0
 # Retry Logic for API Calls
 tenacity>=8.2.0
 
+# Reddit API (for problem_scanner_local.py)
+praw>=7.7.0
+
+# HTML Parsing (for reddit scraper fallback)
+beautifulsoup4>=4.12.0
+
 # ============================================================================
 # OPTIONAL DEPENDENCIES
 # ============================================================================

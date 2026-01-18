@@ -33,7 +33,7 @@ os.environ["OLLAMA_GPU"] = "true"
 
 # --- Configuration ---
 REDDIT_BASE_URL = "https://www.reddit.com/r/{subreddit}/new.json"
-OLLAMA_API_URL = "http://localhost:11435/api/generate"
+OLLAMA_API_URL = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = "llama3.2:3b"  # Best for your GPU
 
 SUBREDDITS = os.getenv("TARGET_SUBREDDITS", "Entrepreneur,SaaS,SideProject,smallbusiness,startups").split(",")

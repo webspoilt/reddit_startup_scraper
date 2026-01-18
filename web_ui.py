@@ -308,13 +308,6 @@ HTML_TEMPLATE = """
                 `;
                 helpText.textContent = 'Ollama runs locally. No internet needed, 100% private.';
             }
-                modelSelect.innerHTML = `
-                    <option value="llama3.2:3b">llama3.2:3b (Recommended)</option>
-                    <option value="deepseek-coder:6.7b">deepseek-coder:6.7b</option>
-                    <option value="llama3.2:1b">llama3.2:1b (Fast)</option>
-                `;
-                helpText.textContent = 'Ollama runs locally. No internet needed, 100% private.';
-            }
         }
         
         async function startScraper() {
