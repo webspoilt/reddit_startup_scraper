@@ -530,122 +530,94 @@ def start_scraper():
     
     data = request.json
     subreddits = data.get('subreddits', DEFAULT_SUBREDDITS)
-    model = data.get('model', 'llama3.2:3b')
+    provider = data.get('provider', 'groq')
     limit = int(data.get('limit', '10'))
-    min_comments = int(data.get('minComments', '3'))
-    provider = data.get('provider', 'groq')  # Default to groq for hosted
     
-    # Check if we're in a hosted environment
+    # Force Groq on hosted environments
     is_hosted = os.getenv('HOSTED_ENVIRONMENT', 'false').lower() == 'true'
-    
-    # Force Groq on hosted environments (Ollama not available)
     if is_hosted and provider == 'ollama':
         provider = 'groq'
     
-    os.environ['TARGET_SUBREDDITS'] = subreddits
-    os.environ['OLLAMA_MODEL'] = model
-    os.environ['POST_LIMIT'] = str(limit)
-    os.environ['MIN_COMMENTS'] = str(min_comments)
-    os.environ['AI_PROVIDER'] = provider
-    
-    scraper_logs = []
+    # Clear logs and set running state
+    scraper_logs.clear()
     scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Starting scraper...")
     scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Provider: {provider.upper()}")
     scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Subreddits: {subreddits[:50]}...")
     scraper_running = True
     
-    def run_scraper_thread():
-        global scraper_running, scraper_logs
+    def run_scraper():
+        global scraper_running
         try:
-            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Loading config...")
+            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Loading modules...")
             
-            # Import and run the scraper directly (no subprocess)
             from config import Config
             from scrapers import RedditClient
-            from detectors import ProblemDetector
             from analyzers import get_analyzer
             
             config = Config()
             config._ai_provider = provider
-            config._post_limit = limit
             
+            # Fetch posts  
             scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Fetching Reddit posts...")
-            
-            # Fetch posts
             reddit_client = RedditClient()
-            subreddit_list = [s.strip() for s in subreddits.split(',')][:3]  # Limit to 3 subreddits for speed
-            posts = []
+            sub_list = [s.strip() for s in subreddits.split(',')[:3]]
             
-            for sub in subreddit_list:
+            all_posts = []
+            for sub in sub_list:
                 scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Fetching r/{sub}...")
                 try:
-                    sub_posts = reddit_client.fetch_posts(sub, limit=min(limit, 5))
-                    posts.extend(sub_posts)
-                    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Got {len(sub_posts)} posts from r/{sub}")
+                    posts = reddit_client.fetch_posts(sub, limit=min(limit, 5))
+                    all_posts.extend(posts)
+                    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Got {len(posts)} posts from r/{sub}")
                 except Exception as e:
-                    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Error fetching r/{sub}: {str(e)[:50]}")
+                    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Error: {str(e)[:40]}")
             
-            if not posts:
+            if not all_posts:
                 scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] No posts found!")
-                scraper_running = False
                 return
             
-            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Total posts: {len(posts)}")
-            
-            # Detect problems
-            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Detecting problems...")
-            detector = ProblemDetector()
-            filtered_posts = []
-            for post in posts:
-                if detector.is_problem_post(post):
-                    filtered_posts.append(post)
-            
-            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Found {len(filtered_posts)} problem posts")
+            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Total: {len(all_posts)} posts")
             
             # Analyze with AI
-            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Analyzing with {provider.upper()}...")
-            
+            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Creating {provider.upper()} analyzer...")
             analyzer = get_analyzer(config)
+            
             if not analyzer:
-                scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: Could not create analyzer!")
-                scraper_running = False
+                scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: No analyzer available!")
                 return
             
             analyses = []
-            for i, post in enumerate(filtered_posts[:5]):  # Limit to 5 for speed
+            for i, post in enumerate(all_posts[:5]):
+                scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Analyzing {i+1}/{min(5, len(all_posts))}...")
                 try:
-                    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Analyzing post {i+1}/{min(len(filtered_posts), 5)}...")
-                    analysis = analyzer.analyze(post)
-                    if analysis:
-                        analyses.append(analysis)
+                    result = analyzer.analyze(post)
+                    if result:
+                        analyses.append(result)
                 except Exception as e:
-                    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Analysis error: {str(e)[:50]}")
+                    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Analysis error: {str(e)[:30]}")
             
             scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Analyzed {len(analyses)} posts!")
             
-            # Save to MongoDB if available
+            # Save to MongoDB
             try:
                 from database.mongodb_client import create_mongodb_client
                 client = create_mongodb_client()
                 if client and client.is_connected():
                     saved = client.save_startup_ideas_batch(analyses)
-                    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Saved {saved} ideas to MongoDB!")
+                    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Saved {saved} to MongoDB!")
                     client.disconnect()
             except Exception as e:
-                scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] MongoDB save skipped: {str(e)[:30]}")
+                scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] DB: {str(e)[:30]}")
             
-            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] ✓ Scraper finished successfully!")
+            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] ✓ Done!")
             
         except Exception as e:
             scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: {str(e)}")
         finally:
             scraper_running = False
     
-    try:
-        threading.Thread(target=run_scraper_thread, daemon=True).start()
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+    threading.Thread(target=run_scraper, daemon=True).start()
+    return jsonify({'success': True})
 
 
 @app.route('/stop', methods=['POST'])
