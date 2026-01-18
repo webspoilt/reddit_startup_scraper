@@ -533,7 +533,14 @@ def start_scraper():
     model = data.get('model', 'llama3.2:3b')
     limit = data.get('limit', '10')
     min_comments = data.get('minComments', '3')
-    provider = data.get('provider', 'ollama')
+    provider = data.get('provider', 'groq')  # Default to groq for hosted
+    
+    # Check if we're in a hosted environment
+    is_hosted = os.getenv('HOSTED_ENVIRONMENT', 'false').lower() == 'true'
+    
+    # Force Groq on hosted environments (Ollama not available)
+    if is_hosted and provider == 'ollama':
+        provider = 'groq'
     
     os.environ['TARGET_SUBREDDITS'] = subreddits
     os.environ['OLLAMA_MODEL'] = model
@@ -544,16 +551,24 @@ def start_scraper():
     scraper_logs = []
     scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Starting scraper...")
     scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Subreddits: {subreddits[:50]}...")
-    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Model: {model}")
+    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Provider: {provider.upper()}")
     
     try:
-        subprocess.Popen(['ollama', 'serve'], 
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                        creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
-        scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Ollama started")
+        # On hosted environments (Render), use main.py with Groq
+        # On local, try to start Ollama first if using ollama provider
+        if not is_hosted and provider == 'ollama':
+            try:
+                subprocess.Popen(['ollama', 'serve'], 
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+                scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Ollama started")
+            except FileNotFoundError:
+                scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Ollama not found, using Groq")
+                os.environ['AI_PROVIDER'] = 'groq'
         
+        # Run main.py (works with both Groq and Ollama)
         scraper_process = subprocess.Popen(
-            [sys.executable, 'ollama_scraper.py'],
+            [sys.executable, 'main.py', '--ai-provider', provider, '--post-limit', str(limit)],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, bufsize=1,
             cwd=os.path.dirname(os.path.abspath(__file__))
