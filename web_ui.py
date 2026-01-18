@@ -511,6 +511,17 @@ def logout():
     return redirect(url_for('login'))
 
 
+# Debug endpoint to verify deployment version
+@app.route('/api/version')
+def version():
+    return jsonify({
+        'version': '2026-01-18-v3',
+        'groq_key_set': bool(GROQ_API_KEY),
+        'hosted': os.getenv('HOSTED_ENVIRONMENT', 'false'),
+        'mongodb_set': bool(os.getenv('MONGODB_URI', ''))
+    })
+
+
 @app.route('/')
 @login_required
 def index():
