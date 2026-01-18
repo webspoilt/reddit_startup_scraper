@@ -1,27 +1,25 @@
-# Render Build Configuration
-# See: https://render.com/docs/yaml-spec
-
 services:
   - type: web
-    name: reddit-startup-scraper
+    name: reddit-scraper
     env: python
-    plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn web_ui:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
+    startCommand: python web_ui.py
     envVars:
-      - key: PYTHON_VERSION
-        value: "3.11.0"
+      - key: DEPLOYMENT_MODE
+        value: cloud
       - key: HOSTED_ENVIRONMENT
         value: "true"
-      - key: AI_PROVIDER
-        value: "groq"
       - key: GROQ_API_KEY
-        sync: false  # Set manually in Render dashboard
-      - key: MONGODB_URI
-        sync: false  # Set manually in Render dashboard
-      - key: MONGODB_DATABASE
-        value: "reddit_startup_scraper"
+        sync: false
       - key: UI_PASSWORD
-        sync: false  # Set manually in Render dashboard
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: USE_OLLAMA
+        value: "false"
+      - key: TARGET_SUBREDDITS
+        value: "Entrepreneur,SaaS,SideProject,smallbusiness,startups"
+      - key: POST_LIMIT
+        value: "25"
       - key: SECRET_KEY
         generateValue: true
