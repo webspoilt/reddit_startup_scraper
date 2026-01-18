@@ -338,6 +338,7 @@ def save_and_export(analyses: List[Dict[str, Any]],
     """
     from exporters import ExportManager
     from utils.outputs import OutputManager
+    from utils.database import save_scrape_results, is_mongodb_available
 
     print_step(4, 5, "Saving & Exporting Results")
 
@@ -373,6 +374,23 @@ def save_and_export(analyses: List[Dict[str, Any]],
         for format_name, filepath in output_paths.items():
             print(f"✓ {format_name.upper()} export: {filepath}")
 
+    # Save to MongoDB (for Render/cloud hosting)
+    if is_mongodb_available():
+        print("\n✓ Saving to MongoDB Atlas...")
+        session_id = save_scrape_results(
+            ideas=analyses,
+            subreddits=config_instance.target_subreddits,
+            provider=config_instance.ai_provider,
+            model=getattr(config_instance, 'ollama_model', 'unknown')
+        )
+        if session_id:
+            print(f"✓ MongoDB: Saved {len(analyses)} ideas (session: {session_id[:8]}...)")
+        else:
+            print("⚠ MongoDB: Failed to save (check connection)")
+    else:
+        print("\n⚠ MongoDB not configured. Data saved to local files only.")
+        print("  To enable cloud storage, set MONGODB_URI in .env")
+
     # Print summary to console
     if config_instance.print_summary:
         print_step(5, 5, "Analysis Summary")
@@ -397,6 +415,7 @@ def save_and_export(analyses: List[Dict[str, Any]],
     print("\n" + "=" * 70)
     print("  EXPORT COMPLETE")
     print("=" * 70)
+
 
 
 def run_scraper(args: argparse.Namespace) -> int:

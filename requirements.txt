@@ -37,6 +37,12 @@ praw>=7.7.0
 # HTML Parsing (for reddit scraper fallback)
 beautifulsoup4>=4.12.0
 
+# MongoDB Atlas (for cloud data persistence)
+pymongo>=4.6.0
+
+# Web UI (Flask)
+flask>=3.0.0
+
 # ============================================================================
 # OPTIONAL DEPENDENCIES
 # ============================================================================

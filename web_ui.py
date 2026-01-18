@@ -706,6 +706,91 @@ Return JSON:
         return jsonify({'success': False, 'error': str(e)})
 
 
+# ============================================================================
+# MongoDB API Endpoints (for saved data access)
+# ============================================================================
+
+@app.route('/api/db/status')
+@login_required
+def db_status():
+    """Check MongoDB connection status."""
+    try:
+        from utils.database import MongoDBStorage
+        storage = MongoDBStorage()
+        stats = storage.get_stats()
+        return jsonify({'success': True, **stats})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'available': False})
+
+
+@app.route('/api/db/sessions')
+@login_required
+def get_sessions():
+    """Get recent scraping sessions."""
+    try:
+        from utils.database import MongoDBStorage
+        storage = MongoDBStorage()
+        sessions = storage.get_recent_sessions(limit=20)
+        return jsonify({'success': True, 'sessions': sessions})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/db/ideas')
+@login_required
+def get_ideas():
+    """Get saved startup ideas."""
+    try:
+        from utils.database import MongoDBStorage
+        storage = MongoDBStorage()
+        
+        limit = request.args.get('limit', 50, type=int)
+        session_id = request.args.get('session_id', None)
+        min_confidence = request.args.get('min_confidence', 0.0, type=float)
+        
+        ideas = storage.get_ideas(limit=limit, session_id=session_id, min_confidence=min_confidence)
+        return jsonify({'success': True, 'ideas': ideas, 'count': len(ideas)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/db/top-ideas')
+@login_required
+def get_top_ideas():
+    """Get top-rated ideas from recent days."""
+    try:
+        from utils.database import MongoDBStorage
+        storage = MongoDBStorage()
+        
+        limit = request.args.get('limit', 10, type=int)
+        days = request.args.get('days', 7, type=int)
+        
+        ideas = storage.get_top_ideas(limit=limit, days=days)
+        return jsonify({'success': True, 'ideas': ideas, 'count': len(ideas)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/db/search')
+@login_required
+def search_ideas():
+    """Search ideas by keyword."""
+    try:
+        from utils.database import MongoDBStorage
+        storage = MongoDBStorage()
+        
+        keyword = request.args.get('q', '')
+        limit = request.args.get('limit', 20, type=int)
+        
+        if not keyword:
+            return jsonify({'success': False, 'error': 'Missing search query (q parameter)'})
+        
+        ideas = storage.search_ideas(keyword=keyword, limit=limit)
+        return jsonify({'success': True, 'ideas': ideas, 'count': len(ideas)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
 if __name__ == '__main__':
     print("=" * 50)
     print("Reddit Scraper - Password Protected")
@@ -714,4 +799,16 @@ if __name__ == '__main__':
     print("Open: http://localhost:5000")
     print("Press Ctrl+C to stop")
     print("=" * 50)
+    
+    # Check MongoDB status on startup
+    try:
+        from utils.database import is_mongodb_available
+        if is_mongodb_available():
+            print("✓ MongoDB Atlas: Connected")
+        else:
+            print("⚠ MongoDB Atlas: Not configured (data will be local only)")
+    except ImportError:
+        print("⚠ MongoDB module not available")
+    
     app.run(host='0.0.0.0', port=5000, debug=False)
+

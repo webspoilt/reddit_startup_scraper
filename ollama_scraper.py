@@ -442,7 +442,27 @@ def main() -> None:
     # 3. Save TXT
     save_to_txt(final_results, os.path.join(output_dir, "startup_ideas_report.txt"))
 
-    # 4. Console Summary
+    # 4. Save to MongoDB (for cloud hosting)
+    try:
+        from utils.database import save_scrape_results, is_mongodb_available
+        if is_mongodb_available():
+            print("\n--- Saving to MongoDB Atlas ---")
+            session_id = save_scrape_results(
+                ideas=final_results,
+                subreddits=SUBREDDITS,
+                provider=analyzer.provider,
+                model=analyzer.ollama_model
+            )
+            if session_id:
+                print(f"[OK] MongoDB: Saved {len(final_results)} ideas (session: {session_id[:8]}...)")
+            else:
+                print("[WARN] MongoDB: Failed to save")
+        else:
+            print("\n[INFO] MongoDB not configured. Data saved to local files only.")
+    except ImportError:
+        print("\n[INFO] MongoDB module not available. Skipping cloud storage.")
+
+    # 5. Console Summary
     print("\n--- Top Ideas Summary ---")
     for idea in final_results[:5]:
         print(f"\n[IDEA] {idea.get('startup_idea', 'N/A')}")
@@ -452,6 +472,7 @@ def main() -> None:
     print("\n" + "=" * 60)
     print(f"[DONE] Scan complete! Data saved to: {output_dir}")
     print("=" * 60)
+
 
 
 if __name__ == "__main__":
