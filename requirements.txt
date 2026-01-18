@@ -43,6 +43,9 @@ pymongo>=4.6.0
 # Web UI (Flask)
 flask>=3.0.0
 
+# Production WSGI server (for Render deployment)
+gunicorn>=21.0.0
+
 # ============================================================================
 # OPTIONAL DEPENDENCIES
 # ============================================================================

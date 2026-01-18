@@ -715,25 +715,15 @@ Return JSON:
 def db_status():
     """Check MongoDB connection status."""
     try:
-        from utils.database import MongoDBStorage
-        storage = MongoDBStorage()
-        stats = storage.get_stats()
-        return jsonify({'success': True, **stats})
+        from database.mongodb_client import create_mongodb_client
+        client = create_mongodb_client()
+        if client and client.is_connected():
+            stats = client.get_stats()
+            client.disconnect()
+            return jsonify({'success': True, 'available': True, **stats})
+        return jsonify({'success': True, 'available': False})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e), 'available': False})
-
-
-@app.route('/api/db/sessions')
-@login_required
-def get_sessions():
-    """Get recent scraping sessions."""
-    try:
-        from utils.database import MongoDBStorage
-        storage = MongoDBStorage()
-        sessions = storage.get_recent_sessions(limit=20)
-        return jsonify({'success': True, 'sessions': sessions})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
 
 
 @app.route('/api/db/ideas')
@@ -741,32 +731,37 @@ def get_sessions():
 def get_ideas():
     """Get saved startup ideas."""
     try:
-        from utils.database import MongoDBStorage
-        storage = MongoDBStorage()
+        from database.mongodb_client import create_mongodb_client
+        client = create_mongodb_client()
+        
+        if not client or not client.is_connected():
+            return jsonify({'success': False, 'error': 'MongoDB not connected'})
         
         limit = request.args.get('limit', 50, type=int)
-        session_id = request.args.get('session_id', None)
-        min_confidence = request.args.get('min_confidence', 0.0, type=float)
+        min_confidence = request.args.get('min_confidence', None, type=float)
+        subreddit = request.args.get('subreddit', None)
         
-        ideas = storage.get_ideas(limit=limit, session_id=session_id, min_confidence=min_confidence)
+        ideas = client.get_startup_ideas(limit=limit, min_confidence=min_confidence, subreddit=subreddit)
+        client.disconnect()
         return jsonify({'success': True, 'ideas': ideas, 'count': len(ideas)})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
 
-@app.route('/api/db/top-ideas')
+@app.route('/api/db/stats')
 @login_required
-def get_top_ideas():
-    """Get top-rated ideas from recent days."""
+def get_db_stats():
+    """Get database statistics."""
     try:
-        from utils.database import MongoDBStorage
-        storage = MongoDBStorage()
+        from database.mongodb_client import create_mongodb_client
+        client = create_mongodb_client()
         
-        limit = request.args.get('limit', 10, type=int)
-        days = request.args.get('days', 7, type=int)
+        if not client or not client.is_connected():
+            return jsonify({'success': False, 'error': 'MongoDB not connected'})
         
-        ideas = storage.get_top_ideas(limit=limit, days=days)
-        return jsonify({'success': True, 'ideas': ideas, 'count': len(ideas)})
+        stats = client.get_stats()
+        client.disconnect()
+        return jsonify({'success': True, **stats})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
@@ -774,18 +769,38 @@ def get_top_ideas():
 @app.route('/api/db/search')
 @login_required
 def search_ideas():
-    """Search ideas by keyword."""
+    """Search ideas by keyword (searches in titles and ideas)."""
     try:
-        from utils.database import MongoDBStorage
-        storage = MongoDBStorage()
+        from database.mongodb_client import create_mongodb_client
+        client = create_mongodb_client()
+        
+        if not client or not client.is_connected():
+            return jsonify({'success': False, 'error': 'MongoDB not connected'})
         
         keyword = request.args.get('q', '')
         limit = request.args.get('limit', 20, type=int)
         
         if not keyword:
+            client.disconnect()
             return jsonify({'success': False, 'error': 'Missing search query (q parameter)'})
         
-        ideas = storage.search_ideas(keyword=keyword, limit=limit)
+        # Search in startup_ideas collection
+        collection = client.get_collection("startup_ideas")
+        ideas = list(collection.find({
+            "$or": [
+                {"title": {"$regex": keyword, "$options": "i"}},
+                {"startup_idea": {"$regex": keyword, "$options": "i"}},
+                {"problem": {"$regex": keyword, "$options": "i"}},
+            ]
+        }).sort("saved_at", -1).limit(limit))
+        
+        # Convert ObjectIds to strings
+        for idea in ideas:
+            idea["_id"] = str(idea["_id"])
+            if idea.get("saved_at"):
+                idea["saved_at"] = idea["saved_at"].isoformat()
+        
+        client.disconnect()
         return jsonify({'success': True, 'ideas': ideas, 'count': len(ideas)})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -796,19 +811,24 @@ if __name__ == '__main__':
     print("Reddit Scraper - Password Protected")
     print("=" * 50)
     print(f"Password: {UI_PASSWORD}")
-    print("Open: http://localhost:5000")
+    
+    # Get port from environment (for Render) or default to 5000
+    port = int(os.getenv("PORT", 5000))
+    print(f"Open: http://localhost:{port}")
     print("Press Ctrl+C to stop")
     print("=" * 50)
     
     # Check MongoDB status on startup
     try:
-        from utils.database import is_mongodb_available
-        if is_mongodb_available():
+        from database.mongodb_client import create_mongodb_client
+        client = create_mongodb_client()
+        if client and client.is_connected():
             print("✓ MongoDB Atlas: Connected")
+            client.disconnect()
         else:
             print("⚠ MongoDB Atlas: Not configured (data will be local only)")
     except ImportError:
         print("⚠ MongoDB module not available")
     
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=port, debug=False)
 
