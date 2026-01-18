@@ -531,8 +531,8 @@ def start_scraper():
     data = request.json
     subreddits = data.get('subreddits', DEFAULT_SUBREDDITS)
     model = data.get('model', 'llama3.2:3b')
-    limit = data.get('limit', '10')
-    min_comments = data.get('minComments', '3')
+    limit = int(data.get('limit', '10'))
+    min_comments = int(data.get('minComments', '3'))
     provider = data.get('provider', 'groq')  # Default to groq for hosted
     
     # Check if we're in a hosted environment
@@ -550,41 +550,99 @@ def start_scraper():
     
     scraper_logs = []
     scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Starting scraper...")
-    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Subreddits: {subreddits[:50]}...")
     scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Provider: {provider.upper()}")
+    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Subreddits: {subreddits[:50]}...")
+    scraper_running = True
+    
+    def run_scraper_thread():
+        global scraper_running, scraper_logs
+        try:
+            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Loading config...")
+            
+            # Import and run the scraper directly (no subprocess)
+            from config import Config
+            from scrapers import RedditClient
+            from detectors import ProblemDetector
+            from analyzers import get_analyzer
+            
+            config = Config()
+            config._ai_provider = provider
+            config._post_limit = limit
+            
+            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Fetching Reddit posts...")
+            
+            # Fetch posts
+            reddit_client = RedditClient()
+            subreddit_list = [s.strip() for s in subreddits.split(',')][:3]  # Limit to 3 subreddits for speed
+            posts = []
+            
+            for sub in subreddit_list:
+                scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Fetching r/{sub}...")
+                try:
+                    sub_posts = reddit_client.fetch_posts(sub, limit=min(limit, 5))
+                    posts.extend(sub_posts)
+                    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Got {len(sub_posts)} posts from r/{sub}")
+                except Exception as e:
+                    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Error fetching r/{sub}: {str(e)[:50]}")
+            
+            if not posts:
+                scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] No posts found!")
+                scraper_running = False
+                return
+            
+            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Total posts: {len(posts)}")
+            
+            # Detect problems
+            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Detecting problems...")
+            detector = ProblemDetector()
+            filtered_posts = []
+            for post in posts:
+                if detector.is_problem_post(post):
+                    filtered_posts.append(post)
+            
+            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Found {len(filtered_posts)} problem posts")
+            
+            # Analyze with AI
+            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Analyzing with {provider.upper()}...")
+            
+            analyzer = get_analyzer(config)
+            if not analyzer:
+                scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: Could not create analyzer!")
+                scraper_running = False
+                return
+            
+            analyses = []
+            for i, post in enumerate(filtered_posts[:5]):  # Limit to 5 for speed
+                try:
+                    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Analyzing post {i+1}/{min(len(filtered_posts), 5)}...")
+                    analysis = analyzer.analyze(post)
+                    if analysis:
+                        analyses.append(analysis)
+                except Exception as e:
+                    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Analysis error: {str(e)[:50]}")
+            
+            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Analyzed {len(analyses)} posts!")
+            
+            # Save to MongoDB if available
+            try:
+                from database.mongodb_client import create_mongodb_client
+                client = create_mongodb_client()
+                if client and client.is_connected():
+                    saved = client.save_startup_ideas_batch(analyses)
+                    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Saved {saved} ideas to MongoDB!")
+                    client.disconnect()
+            except Exception as e:
+                scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] MongoDB save skipped: {str(e)[:30]}")
+            
+            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] ✓ Scraper finished successfully!")
+            
+        except Exception as e:
+            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: {str(e)}")
+        finally:
+            scraper_running = False
     
     try:
-        # On hosted environments (Render), use main.py with Groq
-        # On local, try to start Ollama first if using ollama provider
-        if not is_hosted and provider == 'ollama':
-            try:
-                subprocess.Popen(['ollama', 'serve'], 
-                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
-                scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Ollama started")
-            except FileNotFoundError:
-                scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Ollama not found, using Groq")
-                os.environ['AI_PROVIDER'] = 'groq'
-        
-        # Run main.py (works with both Groq and Ollama)
-        scraper_process = subprocess.Popen(
-            [sys.executable, 'main.py', '--ai-provider', provider, '--post-limit', str(limit)],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, bufsize=1,
-            cwd=os.path.dirname(os.path.abspath(__file__))
-        )
-        scraper_running = True
-        
-        def read_logs():
-            global scraper_running, scraper_logs
-            for line in scraper_process.stdout:
-                scraper_logs.append(line.strip())
-                if len(scraper_logs) > 100:
-                    scraper_logs = scraper_logs[-100:]
-            scraper_running = False
-            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Scraper finished!")
-        
-        threading.Thread(target=read_logs, daemon=True).start()
+        threading.Thread(target=run_scraper_thread, daemon=True).start()
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
