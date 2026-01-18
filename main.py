@@ -331,6 +331,7 @@ def save_and_export(analyses: List[Dict[str, Any]],
                     config_instance) -> None:
     """
     Save and export analysis results in multiple formats.
+    Also saves to MongoDB Atlas if configured.
 
     Args:
         analyses: List of analyzed post dictionaries.
@@ -338,7 +339,7 @@ def save_and_export(analyses: List[Dict[str, Any]],
     """
     from exporters import ExportManager
     from utils.outputs import OutputManager
-    from utils.database import save_scrape_results, is_mongodb_available
+    from database.mongodb_client import create_mongodb_client
 
     print_step(4, 5, "Saving & Exporting Results")
 
@@ -374,22 +375,15 @@ def save_and_export(analyses: List[Dict[str, Any]],
         for format_name, filepath in output_paths.items():
             print(f"✓ {format_name.upper()} export: {filepath}")
 
-    # Save to MongoDB (for Render/cloud hosting)
-    if is_mongodb_available():
-        print("\n✓ Saving to MongoDB Atlas...")
-        session_id = save_scrape_results(
-            ideas=analyses,
-            subreddits=config_instance.target_subreddits,
-            provider=config_instance.ai_provider,
-            model=getattr(config_instance, 'ollama_model', 'unknown')
-        )
-        if session_id:
-            print(f"✓ MongoDB: Saved {len(analyses)} ideas (session: {session_id[:8]}...)")
-        else:
-            print("⚠ MongoDB: Failed to save (check connection)")
+    # Save to MongoDB Atlas (if configured)
+    mongodb_client = create_mongodb_client()
+    if mongodb_client and mongodb_client.is_connected():
+        saved_count = mongodb_client.save_startup_ideas_batch(analyses)
+        if saved_count > 0:
+            print(f"✓ MongoDB Atlas: Saved {saved_count} startup ideas")
+        mongodb_client.disconnect()
     else:
-        print("\n⚠ MongoDB not configured. Data saved to local files only.")
-        print("  To enable cloud storage, set MONGODB_URI in .env")
+        print("  MongoDB: Not configured (set MONGODB_URI to enable)")
 
     # Print summary to console
     if config_instance.print_summary:
