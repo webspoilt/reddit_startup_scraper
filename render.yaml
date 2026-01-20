@@ -3,7 +3,7 @@ services:
     name: reddit-scraper
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python web_ui.py
+    startCommand: gunicorn web_ui:app --bind 0.0.0.0:$PORT --workers 2 --threads 4
     envVars:
       - key: DEPLOYMENT_MODE
         value: cloud

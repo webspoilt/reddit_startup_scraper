@@ -1,6 +1,7 @@
 """
 Reddit Scraper Web UI - Password Protected
 Fixed for Render deployment with threading and proper environment detection
+Modernized UI with glassmorphism design
 """
 import os
 import sys
@@ -38,70 +39,424 @@ DEFAULT_SUBREDDITS = os.getenv("TARGET_SUBREDDITS", "Entrepreneur,SaaS,SideProje
 # Groq API Key
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
-# HTML Template
+# HTML Template - Modernized with Glassmorphism Design
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reddit Startup Scraper</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
-        body { font-family: Arial; margin: 20px; background: #1a1a2e; color: #eee; }
-        .container { max-width: 900px; margin: 0 auto; }
-        .header { text-align: center; margin-bottom: 30px; }
-        .card { background: #16213e; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
-        .btn { padding: 12px 24px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin: 5px; }
-        .btn-start { background: #4CAF50; color: white; }
-        .btn-stop { background: #f44336; color: white; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        input[type="text"], select { padding: 10px; width: 100%; margin: 5px 0; border-radius: 5px; border: 1px solid #333; background: #0f3460; color: white; }
-        .logs { background: #0f0f0f; padding: 15px; border-radius: 5px; height: 300px; overflow-y: auto; font-family: monospace; font-size: 12px; }
-        .status { padding: 10px 20px; border-radius: 5px; display: inline-block; margin: 10px 0; }
-        .status-running { background: #4CAF50; }
-        .status-stopped { background: #f44336; }
-        .info { color: #888; font-size: 14px; }
-        label { display: block; margin-top: 15px; font-weight: bold; }
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-secondary: #111827;
+            --bg-tertiary: #1f2937;
+            --card-bg: rgba(31, 41, 55, 0.7);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --info: #3b82f6;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --gradient-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            --gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            --gradient-danger: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+            --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(139, 92, 246, 0.15) 0%, transparent 40%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 30px 0;
+        }
+
+        .logo {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            display: inline-block;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            background: linear-gradient(to right, #f9fafb, #d1d5db);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .status-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--card-bg);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--card-border);
+            font-size: 0.9rem;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-running .status-indicator {
+            background: var(--success);
+            box-shadow: 0 0 10px var(--success);
+        }
+
+        .status-stopped .status-indicator {
+            background: var(--danger);
+            box-shadow: 0 0 10px var(--danger);
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 25px;
+            border-radius: 16px;
+            margin-bottom: 25px;
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--card-border);
+            box-shadow: var(--shadow-card);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px -10px rgba(0, 0, 0, 0.6);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .card-icon {
+            font-size: 1.5rem;
+            color: var(--primary-light);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        input[type="text"], select {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--card-border);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 1rem;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        input[type="text"]:focus, select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            margin: 5px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn-primary {
+            background: var(--gradient-primary);
+            color: white;
+            box-shadow: var(--shadow-glow);
+        }
+
+        .btn-danger {
+            background: var(--gradient-danger);
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        .btn-full {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .logs-container {
+            background: var(--bg-secondary);
+            padding: 15px;
+            border-radius: 8px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            border: 1px solid var(--card-border);
+        }
+
+        .log-entry {
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .log-time {
+            color: var(--text-muted);
+            margin-right: 10px;
+        }
+
+        .log-info {
+            color: var(--info);
+        }
+
+        .log-success {
+            color: var(--success);
+        }
+
+        .log-error {
+            color: var(--danger);
+        }
+
+        .log-warning {
+            color: var(--warning);
+        }
+
+        .result-box {
+            margin-top: 15px;
+            padding: 15px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            border: 1px solid var(--card-border);
+        }
+
+        .result-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+
+        .result-item {
+            margin-bottom: 8px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .result-label {
+            font-weight: 500;
+            color: var(--text-secondary);
+            min-width: 100px;
+        }
+
+        .result-value {
+            color: var(--text-primary);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 1.8rem;
+            }
+            
+            .logo {
+                font-size: 2rem;
+            }
+            
+            .status-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🚀 Reddit Startup Idea Scraper</h1>
-            <p class="info">
-                AI: <span id="ai-provider">Groq (Cloud)</span> | 
-                Mode: <span id="deployment-mode">Cloud Hosting</span> |
-                Status: <span id="status" class="status status-stopped">Stopped</span>
-            </p>
-        </div>
-        
-        <div class="card">
-            <h3>📊 Scraper Controls</h3>
-            <label>Subreddits (comma-separated):</label>
-            <input type="text" id="subreddits" value="{{ default_subs }}">
-            
-            <label>Post Limit:</label>
-            <input type="text" id="post-limit" value="25">
-            
-            <label>Minimum Comments:</label>
-            <input type="text" id="min-comments" value="3">
-            
-            <div style="margin-top: 20px;">
-                <button class="btn btn-start" id="start-btn" onclick="startScraper()">▶ Start Scraper</button>
-                <button class="btn btn-stop" id="stop-btn" onclick="stopScraper()" disabled>⏹ Stop</button>
+            <div class="logo">🚀</div>
+            <h1>Reddit Startup Idea Scraper</h1>
+            <div class="status-bar">
+                <div class="status-item">
+                    <i class="material-icons" style="color: var(--primary-light)">smart_toy</i>
+                    <span id="ai-provider">Groq (Cloud)</span>
+                </div>
+                <div class="status-item">
+                    <i class="material-icons" style="color: var(--info)">cloud</i>
+                    <span id="deployment-mode">Cloud Hosting</span>
+                </div>
+                <div class="status-item status-stopped" id="status-indicator">
+                    <span class="status-indicator"></span>
+                    <span id="status-text">Stopped</span>
+                </div>
             </div>
         </div>
         
-        <div class="card">
-            <h3>🔍 Analyze Single Post</h3>
-            <label>Reddit Post URL:</label>
-            <input type="text" id="single-url" placeholder="https://www.reddit.com/r/...">
-            <button class="btn btn-start" onclick="analyzeSingle()">Analyze</button>
-            <div id="single-result" style="margin-top: 15px;"></div>
+        <div class="grid-2">
+            <div class="card fade-in">
+                <div class="card-header">
+                    <i class="material-icons card-icon">settings</i>
+                    <h2 class="card-title">Scraper Controls</h2>
+                </div>
+                
+                <div class="form-group">
+                    <label for="subreddits">Subreddits (comma-separated)</label>
+                    <input type="text" id="subreddits" value="{{ default_subs }}">
+                </div>
+                
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label for="post-limit">Post Limit</label>
+                        <input type="text" id="post-limit" value="25">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="min-comments">Minimum Comments</label>
+                        <input type="text" id="min-comments" value="3">
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <button class="btn btn-primary" id="start-btn" onclick="startScraper()">
+                        <i class="material-icons">play_arrow</i> Start Scraper
+                    </button>
+                    <button class="btn btn-danger" id="stop-btn" onclick="stopScraper()" disabled>
+                        <i class="material-icons">stop</i> Stop
+                    </button>
+                </div>
+            </div>
+            
+            <div class="card fade-in">
+                <div class="card-header">
+                    <i class="material-icons card-icon">search</i>
+                    <h2 class="card-title">Analyze Single Post</h2>
+                </div>
+                
+                <div class="form-group">
+                    <label for="single-url">Reddit Post URL</label>
+                    <input type="text" id="single-url" placeholder="https://www.reddit.com/r/...">
+                </div>
+                
+                <button class="btn btn-primary btn-full" onclick="analyzeSingle()">
+                    <i class="material-icons">analytics</i> Analyze
+                </button>
+                
+                <div id="single-result"></div>
+            </div>
         </div>
         
-        <div class="card">
-            <h3>📋 Logs</h3>
-            <button class="btn" onclick="clearLogs()">Clear</button>
-            <div class="logs" id="log-container"></div>
+        <div class="card fade-in">
+            <div class="card-header">
+                <i class="material-icons card-icon">terminal</i>
+                <h2 class="card-title">Logs</h2>
+                <button class="btn" style="margin-left: auto; padding: 6px 12px; font-size: 0.85rem;" onclick="clearLogs()">
+                    <i class="material-icons" style="font-size: 0.85rem;">clear_all</i> Clear
+                </button>
+            </div>
+            <div class="logs-container" id="log-container"></div>
         </div>
     </div>
     
@@ -109,16 +464,27 @@ HTML_TEMPLATE = '''
         let logs = [];
         let running = false;
         
-        function addLog(msg) {
+        function addLog(msg, type = 'info') {
             const time = new Date().toLocaleTimeString();
-            logs.push(`[${time}] ${msg}`);
-            document.getElementById('log-container').innerHTML = logs.slice(-50).join('\\n');
-            document.getElementById('log-container').scrollTop = document.getElementById('log-container').scrollHeight;
+            const logClass = `log-${type}`;
+            logs.push({ time, msg, type });
+            updateLogDisplay();
+        }
+        
+        function updateLogDisplay() {
+            const logContainer = document.getElementById('log-container');
+            logContainer.innerHTML = logs.slice(-50).map(log => 
+                `<div class="log-entry">
+                    <span class="log-time">[${log.time}]</span>
+                    <span class="log-${log.type}">${log.msg}</span>
+                </div>`
+            ).join('');
+            logContainer.scrollTop = logContainer.scrollHeight;
         }
         
         function clearLogs() {
             logs = [];
-            document.getElementById('log-container').innerHTML = '';
+            updateLogDisplay();
         }
         
         async function startScraper() {
@@ -126,8 +492,8 @@ HTML_TEMPLATE = '''
             const postLimit = document.getElementById('post-limit').value;
             const minComments = document.getElementById('min-comments').value;
             
-            addLog('Starting scraper with Groq API...');
-            addLog(`Subreddits: ${subreddits}`);
+            addLog('Starting scraper with Groq API...', 'info');
+            addLog(`Subreddits: ${subreddits}`, 'info');
             
             try {
                 const response = await fetch('/start', {
@@ -144,35 +510,36 @@ HTML_TEMPLATE = '''
                 if (result.success) {
                     running = true;
                     updateUI();
-                    addLog('Scraper started successfully!');
+                    addLog('Scraper started successfully!', 'success');
                     pollLogs();
                 } else {
-                    addLog('Error: ' + result.error);
+                    addLog('Error: ' + result.error, 'error');
                 }
             } catch (e) {
-                addLog('Network error: ' + e.message);
+                addLog('Network error: ' + e.message, 'error');
             }
         }
         
         async function stopScraper() {
             try {
+                addLog('Stopping scraper...', 'warning');
                 const response = await fetch('/stop', {method: 'POST'});
                 const result = await response.json();
                 if (result.success) {
                     running = false;
                     updateUI();
-                    addLog('Scraper stopped.');
+                    addLog('Scraper stopped.', 'success');
                 }
             } catch (e) {
-                addLog('Error stopping: ' + e.message);
+                addLog('Error stopping: ' + e.message, 'error');
             }
         }
         
         async function analyzeSingle() {
             const url = document.getElementById('single-url').value;
-            if (!url) return addLog('Please enter a URL');
+            if (!url) return addLog('Please enter a URL', 'error');
             
-            addLog('Analyzing single post...');
+            addLog('Analyzing single post...', 'info');
             
             try {
                 const response = await fetch('/analyze-single', {
@@ -184,27 +551,47 @@ HTML_TEMPLATE = '''
                 const result = await response.json();
                 if (result.success) {
                     document.getElementById('single-result').innerHTML = `
-                        <div style="background: #0f3460; padding: 15px; border-radius: 5px; margin-top: 10px;">
-                            <strong>💡 Startup Idea:</strong> ${result.idea}<br>
-                            <strong>📊 Type:</strong> ${result.type}<br>
-                            <strong>🎯 Confidence:</strong> ${(result.confidence * 100).toFixed(0)}%
+                        <div class="result-box fade-in">
+                            <h3 class="result-title">💡 Analysis Result</h3>
+                            <div class="result-item">
+                                <span class="result-label">Startup Idea:</span>
+                                <span class="result-value">${result.idea}</span>
+                            </div>
+                            <div class="result-item">
+                                <span class="result-label">Type:</span>
+                                <span class="result-value">${result.type}</span>
+                            </div>
+                            <div class="result-item">
+                                <span class="result-label">Confidence:</span>
+                                <span class="result-value">${(result.confidence * 100).toFixed(0)}%</span>
+                            </div>
                         </div>
                     `;
-                    addLog('Analysis complete!');
+                    addLog('Analysis complete!', 'success');
                 } else {
-                    addLog('Analysis error: ' + result.error);
+                    addLog('Analysis error: ' + result.error, 'error');
                 }
             } catch (e) {
-                addLog('Error: ' + e.message);
+                addLog('Error: ' + e.message, 'error');
             }
         }
         
         function updateUI() {
             document.getElementById('start-btn').disabled = running;
             document.getElementById('stop-btn').disabled = !running;
-            const statusEl = document.getElementById('status');
-            statusEl.textContent = running ? 'Running' : 'Stopped';
-            statusEl.className = 'status ' + (running ? 'status-running' : 'status-stopped');
+            
+            const statusIndicator = document.getElementById('status-indicator');
+            const statusText = document.getElementById('status-text');
+            
+            if (running) {
+                statusIndicator.classList.remove('status-stopped');
+                statusIndicator.classList.add('status-running');
+                statusText.textContent = 'Running';
+            } else {
+                statusIndicator.classList.remove('status-running');
+                statusIndicator.classList.add('status-stopped');
+                statusText.textContent = 'Stopped';
+            }
         }
         
         async function pollLogs() {
@@ -214,48 +601,254 @@ HTML_TEMPLATE = '''
                     const data = await response.json();
                     if (data.logs && data.logs.length > logs.length) {
                         for (let i = logs.length; i < data.logs.length; i++) {
-                            addLog(data.logs[i]);
+                            // Parse the log format to determine the type
+                            const logMsg = data.logs[i];
+                            let logType = 'info';
+                            
+                            if (logMsg.toLowerCase().includes('error')) {
+                                logType = 'error';
+                            } else if (logMsg.toLowerCase().includes('complete') || logMsg.toLowerCase().includes('success')) {
+                                logType = 'success';
+                            } else if (logMsg.toLowerCase().includes('warning') || logMsg.toLowerCase().includes('stopping')) {
+                                logType = 'warning';
+                            }
+                            
+                            // Extract the message part (after the timestamp)
+                            const msgMatch = logMsg.match(/\[.*?\]\s*(.*)/);
+                            const msg = msgMatch ? msgMatch[1] : logMsg;
+                            
+                            addLog(msg, logType);
                         }
                     }
                     running = data.running;
                     updateUI();
-                } catch (e) {}
+                } catch (e) {
+                    // Silently handle network errors
+                }
                 await new Promise(r => setTimeout(r, 2000));
             }
         }
         
         // Initial status check
         updateUI();
-        addLog('Web UI ready. Mode: Cloud (Groq API)');
+        addLog('Web UI ready. Mode: Cloud (Groq API)', 'success');
     </script>
 </body>
 </html>
 '''
 
-# Login Template
+# Login Template - Modernized Design
 LOGIN_TEMPLATE = '''
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Reddit Scraper</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
-        body { font-family: Arial; display: flex; justify-content: center; align-items: center; height: 100vh; background: #1a1a2e; margin: 0; }
-        .login-box { background: #16213e; padding: 40px; border-radius: 10px; text-align: center; }
-        input { padding: 12px; width: 200px; margin: 10px 0; border-radius: 5px; border: 1px solid #333; background: #0f3460; color: white; }
-        button { padding: 12px 30px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
-        h1 { color: #fff; }
-        .error { color: #f44336; }
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-secondary: #111827;
+            --bg-tertiary: #1f2937;
+            --card-bg: rgba(31, 41, 55, 0.7);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
+            --error: #ef4444;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --gradient-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            --shadow-card: 0 20px 40px -10px rgba(0, 0, 0, 0.7);
+            --shadow-glow: 0 0 30px rgba(99, 102, 241, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(139, 92, 246, 0.15) 0%, transparent 40%);
+            padding: 20px;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 420px;
+            padding: 40px;
+            background: var(--card-bg);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border);
+            box-shadow: var(--shadow-card);
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 3.5rem;
+            margin-bottom: 20px;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            display: inline-block;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            background: linear-gradient(to right, #f9fafb, #d1d5db);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+            font-size: 0.95rem;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .input-container {
+            position: relative;
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+        }
+
+        input[type="password"] {
+            width: 100%;
+            padding: 14px 16px 14px 42px;
+            border-radius: 10px;
+            border: 1px solid var(--card-border);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 1rem;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        input[type="password"]:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: var(--gradient-primary);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: var(--shadow-glow);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .error-message {
+            color: var(--error);
+            margin-bottom: 20px;
+            padding: 12px;
+            background: rgba(239, 68, 68, 0.1);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .footer {
+            margin-top: 30px;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 30px 20px;
+            }
+            
+            h1 {
+                font-size: 1.5rem;
+            }
+            
+            .logo {
+                font-size: 2.8rem;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="login-box">
-        <h1>🔐 Reddit Scraper</h1>
-        {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    <div class="login-container">
+        <div class="logo">🔐</div>
+        <h1>Reddit Scraper</h1>
+        <p class="subtitle">Enter your password to access the dashboard</p>
+        
+        {% if error %}
+        <div class="error-message">
+            <i class="material-icons">error_outline</i>
+            {{ error }}
+        </div>
+        {% endif %}
+        
         <form method="POST">
-            <input type="password" name="password" placeholder="Password" required>
-            <br>
-            <button type="submit">Login</button>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <div class="input-container">
+                    <i class="material-icons input-icon">lock</i>
+                    <input type="password" id="password" name="password" placeholder="Enter your password" required>
+                </div>
+            </div>
+            <button type="submit" class="btn">
+                Login <i class="material-icons" style="vertical-align: middle; font-size: 1.1rem;">arrow_forward</i>
+            </button>
         </form>
+        
+        <div class="footer">
+            <p>Secure access to Reddit Startup Idea Scraper</p>
+        </div>
     </div>
 </body>
 </html>
