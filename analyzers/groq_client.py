@@ -31,6 +31,11 @@ class PostAnalysis:
     confidence_score: float
     model_used: str
     analysis_timestamp: str
+    tags: list = None  # Tags like ["frustration", "india", "b2b"]
+    
+    def __post_init__(self):
+        if self.tags is None:
+            self.tags = []
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -47,6 +52,7 @@ class PostAnalysis:
             "confidence_score": self.confidence_score,
             "model_used": self.model_used,
             "analysis_timestamp": self.analysis_timestamp,
+            "tags": self.tags,
         }
 
     def to_markdown(self) -> str:
@@ -175,6 +181,12 @@ For each post, provide a structured JSON response with these fields:
 5. estimated_complexity: "Low", "Medium", or "High"
 6. potential_market_size: "Small", "Medium", or "Large"
 7. confidence_score: Float between 0.0 and 1.0
+8. tags: Array of relevant tags from these categories:
+   - Sentiment: "frustration", "complaint", "rant", "question", "seeking_advice", "idea_validation"
+   - Region (if mentioned): "india", "us", "uk", "europe", "asia", "global"
+   - Problem type: "b2b", "b2c", "technical", "financial", "productivity", "automation", "communication"
+   - Industry: "saas", "ecommerce", "freelance", "agency", "fintech", "edtech", "healthcare"
+   Pick 3-5 most relevant tags.
 
 Respond with valid JSON only, no markdown formatting."""
 
@@ -238,6 +250,7 @@ Respond with valid JSON only, no markdown formatting."""
                 confidence_score=analysis_data.get("confidence_score", 0.5),
                 model_used=f"groq/{self._selected_model}",
                 analysis_timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                tags=analysis_data.get("tags", []),
             )
 
         except Exception as e:

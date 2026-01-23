@@ -1013,6 +1013,7 @@ def run_scraper_thread(subreddits, post_limit, min_comments):
                         analysis['confidence_score'] = ai_result.confidence_score
                         analysis['core_problem_summary'] = getattr(ai_result, 'core_problem_summary', '')
                         analysis['target_audience'] = getattr(ai_result, 'target_audience', '')
+                        analysis['tags'] = getattr(ai_result, 'tags', [])  # Tags like ["frustration", "india", "b2b"]
                 except Exception as e:
                     log(f"AI error on post {i+1}: {str(e)[:50]}", 'WARN')
             
