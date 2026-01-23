@@ -968,6 +968,12 @@ def run_scraper_thread(subreddits, post_limit, min_comments):
             post_comments = post.comments if post.comments else []
             top_comments = post_comments[:5] if post_comments else []
             
+            # Log what we got
+            if (i + 1) % 5 == 0:  # Log status every 5 posts
+                body_info = f"{len(post_body)} chars" if post_body else "empty"
+                comments_info = f"{len(post_comments)} comments" if post_comments else "none"
+                log(f"  Post {i+1}: body={body_info}, {comments_info}")
+            
             # Simple keyword-based analysis as fallback
             analysis = {
                 'title': post.title,
