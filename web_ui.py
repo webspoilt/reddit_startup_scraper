@@ -410,7 +410,7 @@ HTML_TEMPLATE = '''
                 <div class="grid-2">
                     <div class="form-group">
                         <label for="post-limit">Post Limit</label>
-                        <input type="text" id="post-limit" value="25">
+                        <input type="text" id="post-limit" value="50">
                     </div>
                     
                     <div class="form-group">
