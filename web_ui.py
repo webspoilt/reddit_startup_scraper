@@ -960,18 +960,33 @@ def run_scraper_thread(subreddits, post_limit, min_comments):
                 log("Stop requested, ending early", 'WARN')
                 break
             
+            # Get full post data including comments
+            post_body = post.body if post.body else ''
+            post_comments = getattr(post, 'comments', [])
+            top_comments = post_comments[:5] if post_comments else []
+            
             # Simple keyword-based analysis as fallback
             analysis = {
                 'title': post.title,
-                'body': post.body[:500] if post.body else '',
+                'body': post_body,  # Full body content
+                'body_preview': post_body[:500] if post_body else '',  # Short preview
                 'url': post.url,
                 'subreddit': post.subreddit,
+                'author': getattr(post, 'author', 'unknown'),
+                'created_utc': getattr(post, 'created_utc', None),
                 'startup_idea': f"Opportunity from: {post.title[:50]}...",
                 'startup_type': 'Micro-SaaS',
                 'confidence_score': 0.6,
                 'category': 'General Business',
                 'upvotes': getattr(post, 'upvotes', 0),
                 'num_comments': getattr(post, 'num_comments', 0),
+                'top_comments': [
+                    {
+                        'body': c.get('body', c) if isinstance(c, dict) else str(c),
+                        'author': c.get('author', 'unknown') if isinstance(c, dict) else 'unknown',
+                        'score': c.get('score', 0) if isinstance(c, dict) else 0
+                    } for c in top_comments
+                ],
             }
             
             # Try AI analysis
