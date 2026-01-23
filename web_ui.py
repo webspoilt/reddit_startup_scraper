@@ -866,27 +866,40 @@ def login_required(f):
 
 def run_scraper_thread(subreddits, post_limit, min_comments):
     """
-    Run the scraper in a thread - imports and runs main.py with proper environment
+    Run the scraper in a thread - imports and runs main.py with proper environment.
+    Fixed: Saves results to MongoDB and properly logs all output.
     """
     global scraper_running, scraper_logs
     
+    def log(msg, level='INFO'):
+        """Thread-safe logging that adds to scraper_logs"""
+        timestamp = datetime.now().strftime('%H:%M:%S')
+        scraper_logs.append(f"[{timestamp}] [{level}] {msg}")
+        print(f"[{timestamp}] [{level}] {msg}", flush=True)
+    
     scraper_logs.clear()
-    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Starting scraper thread...")
-    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Mode: Cloud (Groq API)")
-    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Subreddits: {subreddits}")
+    log("Starting scraper thread...")
+    log(f"Mode: {'Cloud (Groq API)' if GROQ_API_KEY else 'Local (Keyword)'}")
+    log(f"Subreddits: {subreddits}")
+    log(f"Post Limit: {post_limit}, Min Comments: {min_comments}")
+    
+    analyzed = []
     
     try:
-        # Import and run the main scraper
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("main_module", "main.py")
-        main_module = importlib.util.module_from_spec(spec)
-        sys.modules["main_module"] = main_module
-        spec.loader.exec_module(main_module)
+        # Check MongoDB availability early
+        try:
+            from utils.database import is_mongodb_available, save_scrape_results
+            mongodb_available = is_mongodb_available()
+            log(f"MongoDB: {'Connected' if mongodb_available else 'Not configured'}")
+        except ImportError as e:
+            log(f"MongoDB module not available: {e}", 'WARN')
+            mongodb_available = False
+            save_scrape_results = None
         
         # Create a simple config-like object
         class MockConfig:
             def __init__(self):
-                self.target_subreddits = subreddits.split(',')
+                self.target_subreddits = [s.strip() for s in subreddits.split(',')]
                 self.post_limit = int(post_limit)
                 self.min_comments = int(min_comments)
                 self.use_problem_filter = True
@@ -897,66 +910,76 @@ def run_scraper_thread(subreddits, post_limit, min_comments):
                 self.deployment_mode = 'cloud'
         
         config = MockConfig()
+        log(f"Config loaded: {len(config.target_subreddits)} subreddits")
         
         # Import RedditClient and analyzer
         from scrapers.reddit_client import RedditClient
         from analyzers import get_analyzer, AIProvider
         
-        scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Fetching posts from Reddit...")
-        
+        log("Initializing Reddit client...")
         reddit_client = RedditClient(config=config)
         
         if not reddit_client.test_connection():
-            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: Cannot connect to Reddit")
+            log("ERROR: Cannot connect to Reddit", 'ERROR')
             scraper_running = False
             return
+        
+        log("Connected to Reddit, fetching posts...")
         
         all_posts = reddit_client.fetch_all_subreddits()
         posts = []
         for subreddit_name, post_list in all_posts.items():
+            log(f"  r/{subreddit_name}: {len(post_list)} posts")
             posts.extend(post_list)
         
-        scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Fetched {len(posts)} posts total")
+        log(f"Fetched {len(posts)} posts total")
         
         if not posts:
-            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: No posts found")
+            log("ERROR: No posts found matching criteria", 'ERROR')
             scraper_running = False
             return
         
         # Get analyzer (use Groq for cloud deployment)
         provider = AIProvider.GROQ if GROQ_API_KEY else AIProvider.KEYWORD
+        log(f"Initializing AI analyzer: {provider.value.upper()}")
+        
         analyzer = get_analyzer(config=config, provider=provider)
         
         if analyzer:
-            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Analyzing with {provider.value.upper()}...")
+            model_name = getattr(analyzer, 'model_name', 'unknown')
+            log(f"AI analyzer ready: {model_name}")
         else:
-            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] No AI available, using keyword analysis")
+            log("No AI available, using keyword-only analysis", 'WARN')
         
-        analyzed = []
+        # Analyze posts
+        total_to_analyze = min(len(posts), int(post_limit))
+        log(f"Starting analysis of {total_to_analyze} posts...")
+        
         for i, post in enumerate(posts[:int(post_limit)]):
             if stop_scraper_flag.is_set():
-                scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Stop requested, ending early")
+                log("Stop requested, ending early", 'WARN')
                 break
             
-            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Analyzing post {i+1}/{min(len(posts), int(post_limit))}...")
-            
-            # Simple keyword-based analysis for reliability
+            # Simple keyword-based analysis as fallback
             analysis = {
                 'title': post.title,
-                'body': post.body,
+                'body': post.body[:500] if post.body else '',
                 'url': post.url,
                 'subreddit': post.subreddit,
-                'startup_idea': f"Auto-generated idea from: {post.title[:50]}...",
+                'startup_idea': f"Opportunity from: {post.title[:50]}...",
                 'startup_type': 'Micro-SaaS',
                 'confidence_score': 0.6,
-                'category': 'General Business'
+                'category': 'General Business',
+                'upvotes': getattr(post, 'upvotes', 0),
+                'num_comments': getattr(post, 'num_comments', 0),
             }
             
+            # Try AI analysis
             if analyzer:
                 try:
                     ai_result = analyzer.analyze_post(
                         title=post.title,
-                        body=post.body,
+                        body=post.body or '',
                         subreddit=post.subreddit,
                         post_url=post.url
                     )
@@ -964,24 +987,53 @@ def run_scraper_thread(subreddits, post_limit, min_comments):
                         analysis['startup_idea'] = ai_result.startup_idea
                         analysis['startup_type'] = ai_result.startup_type
                         analysis['confidence_score'] = ai_result.confidence_score
+                        analysis['core_problem_summary'] = getattr(ai_result, 'core_problem_summary', '')
+                        analysis['target_audience'] = getattr(ai_result, 'target_audience', '')
                 except Exception as e:
-                    scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] AI analysis error: {e}")
+                    log(f"AI error on post {i+1}: {str(e)[:50]}", 'WARN')
             
             analyzed.append(analysis)
+            
+            # Progress update every 5 posts
+            if (i + 1) % 5 == 0 or (i + 1) == total_to_analyze:
+                log(f"Analyzed {i+1}/{total_to_analyze} posts...")
         
-        scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Analysis complete! Found {len(analyzed)} opportunities")
+        log(f"Analysis complete! Found {len(analyzed)} opportunities")
         
-        # Log top ideas
+        # --- SAVE TO MONGODB ---
+        if mongodb_available and analyzed and save_scrape_results:
+            log("Saving results to MongoDB Atlas...")
+            try:
+                session_id = save_scrape_results(
+                    ideas=analyzed,
+                    subreddits=config.target_subreddits,
+                    provider=provider.value,
+                    model=getattr(analyzer, 'model_name', 'unknown') if analyzer else 'keyword'
+                )
+                if session_id:
+                    log(f"SUCCESS: Saved {len(analyzed)} ideas to MongoDB (session: {session_id[:8]}...)")
+                else:
+                    log("WARNING: MongoDB save returned no session ID", 'WARN')
+            except Exception as e:
+                log(f"MongoDB save error: {str(e)}", 'ERROR')
+        elif not mongodb_available:
+            log("MongoDB not configured - results NOT saved to cloud", 'WARN')
+        
+        # Log top ideas summary
+        log("=== TOP STARTUP IDEAS ===")
         for i, idea in enumerate(analyzed[:5]):
-            scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] #{i+1}: {idea['startup_idea'][:60]}...")
+            log(f"#{i+1}: {idea['startup_idea'][:60]}...")
+        
+        log("Scraper completed successfully!")
         
     except Exception as e:
         import traceback
-        scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: {str(e)}")
-        scraper_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] {traceback.format_exc()}")
+        log(f"ERROR: {str(e)}", 'ERROR')
+        log(f"Traceback: {traceback.format_exc()}", 'ERROR')
     finally:
         scraper_running = False
         stop_scraper_flag.clear()
+        log(f"Thread finished. Analyzed {len(analyzed)} posts.")
 
 
 @app.route('/login', methods=['GET', 'POST'])
