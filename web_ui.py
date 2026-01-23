@@ -960,7 +960,9 @@ def run_scraper_thread(subreddits, post_limit, min_comments):
                 log("Stop requested, ending early", 'WARN')
                 break
             
-            # Get full post data including comments
+            # Get full post data including comments (fetches from Reddit JSON API)
+            if (i + 1) % 5 == 1:  # Log every 5 posts
+                log(f"Fetching details for posts {i+1}-{min(i+5, total_to_analyze)}...")
             post = reddit_client.fetch_post_details(post, max_comments=10)
             post_body = post.body if post.body else ''
             post_comments = post.comments if post.comments else []

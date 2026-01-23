@@ -295,16 +295,19 @@ class RedditClient:
             # Use Reddit JSON API to get post details and comments
             # Convert URL to .json endpoint
             post_url = post.url.rstrip('/')
-            if 'reddit.com' in post_url:
-                json_url = post_url + '.json'
-            else:
+            if 'reddit.com' not in post_url:
+                print(f"   [DEBUG] Skipping non-reddit URL: {post_url[:50]}", flush=True)
                 return post
             
+            json_url = post_url + '.json'
+            
             headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "application/json",
             }
             
-            response = requests.get(json_url, headers=headers, timeout=15)
+            response = requests.get(json_url, headers=headers, timeout=20)
+            
             if response.status_code == 200:
                 data = response.json()
                 
@@ -315,8 +318,12 @@ class RedditClient:
                     
                     # Update body if we got selftext
                     selftext = post_data.get('selftext', '')
-                    if selftext and selftext != '[removed]' and selftext != '[deleted]':
+                    if selftext and selftext not in ['[removed]', '[deleted]', '']:
                         post.body = selftext
+                        print(f"   [DEBUG] Got body: {len(selftext)} chars", flush=True)
+                    
+                    # Update num_comments from actual data
+                    post.num_comments = post_data.get('num_comments', post.num_comments)
                     
                     # Get comments
                     if len(data) >= 2:
@@ -333,12 +340,20 @@ class RedditClient:
                                         'score': c_data.get('score', 0),
                                     })
                         post.comments = comments
+                        if comments:
+                            print(f"   [DEBUG] Got {len(comments)} comments", flush=True)
+            else:
+                print(f"   [DEBUG] Reddit API returned {response.status_code} for {post.id}", flush=True)
             
             # Small delay to avoid rate limiting
-            time_module.sleep(0.5)
+            time_module.sleep(0.3)
             
+        except requests.exceptions.Timeout:
+            print(f"   [DEBUG] Timeout fetching details for {post.id}", flush=True)
+        except requests.exceptions.RequestException as e:
+            print(f"   [DEBUG] Request error for {post.id}: {str(e)[:50]}", flush=True)
         except Exception as e:
-            logger.debug(f"Could not fetch details for post {post.id}: {e}")
+            print(f"   [DEBUG] Error fetching {post.id}: {str(e)[:50]}", flush=True)
         
         return post
 
