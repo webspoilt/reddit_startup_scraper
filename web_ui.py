@@ -961,8 +961,9 @@ def run_scraper_thread(subreddits, post_limit, min_comments):
                 break
             
             # Get full post data including comments
+            post = reddit_client.fetch_post_details(post, max_comments=10)
             post_body = post.body if post.body else ''
-            post_comments = getattr(post, 'comments', [])
+            post_comments = post.comments if post.comments else []
             top_comments = post_comments[:5] if post_comments else []
             
             # Simple keyword-based analysis as fallback

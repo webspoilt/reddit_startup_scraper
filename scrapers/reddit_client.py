@@ -24,6 +24,11 @@ class RedditPost:
     score: int
     num_comments: int
     created_utc: float
+    comments: list = None  # Top comments from the post
+
+    def __post_init__(self):
+        if self.comments is None:
+            self.comments = []
 
     @property
     def upvotes(self) -> int:
@@ -41,6 +46,7 @@ class RedditPost:
             "score": self.score,
             "num_comments": self.num_comments,
             "created_utc": self.created_utc,
+            "comments": self.comments,
         }
 
 
@@ -271,6 +277,70 @@ class RedditClient:
             pass
 
         return []
+
+    def fetch_post_details(self, post: RedditPost, max_comments: int = 10) -> RedditPost:
+        """Fetch full post details including body and top comments using Reddit JSON API."""
+        import requests
+        import time as time_module
+        
+        if self._use_simulation:
+            # For simulation, add sample comments
+            post.comments = [
+                {"author": "helpful_user", "body": "Have you tried using XYZ tool? It solved this for me.", "score": 15},
+                {"author": "another_user", "body": "I have the same problem. Would pay for a solution!", "score": 8},
+            ]
+            return post
+        
+        try:
+            # Use Reddit JSON API to get post details and comments
+            # Convert URL to .json endpoint
+            post_url = post.url.rstrip('/')
+            if 'reddit.com' in post_url:
+                json_url = post_url + '.json'
+            else:
+                return post
+            
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+            
+            response = requests.get(json_url, headers=headers, timeout=15)
+            if response.status_code == 200:
+                data = response.json()
+                
+                # First element is the post, second is comments
+                if isinstance(data, list) and len(data) >= 1:
+                    # Get post data
+                    post_data = data[0].get('data', {}).get('children', [{}])[0].get('data', {})
+                    
+                    # Update body if we got selftext
+                    selftext = post_data.get('selftext', '')
+                    if selftext and selftext != '[removed]' and selftext != '[deleted]':
+                        post.body = selftext
+                    
+                    # Get comments
+                    if len(data) >= 2:
+                        comments_data = data[1].get('data', {}).get('children', [])
+                        comments = []
+                        for comment in comments_data[:max_comments]:
+                            if comment.get('kind') == 't1':  # t1 = comment
+                                c_data = comment.get('data', {})
+                                comment_body = c_data.get('body', '')
+                                if comment_body and comment_body not in ['[removed]', '[deleted]']:
+                                    comments.append({
+                                        'author': c_data.get('author', '[deleted]'),
+                                        'body': comment_body,
+                                        'score': c_data.get('score', 0),
+                                    })
+                        post.comments = comments
+            
+            # Small delay to avoid rate limiting
+            time_module.sleep(0.5)
+            
+        except Exception as e:
+            logger.debug(f"Could not fetch details for post {post.id}: {e}")
+        
+        return post
 
     def fetch_all_subreddits(self) -> Dict[str, List[RedditPost]]:
         """Fetch posts from all configured subreddits."""
