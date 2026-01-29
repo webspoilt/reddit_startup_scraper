@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.env
+*.env.local
+.venv/
+venv/
+env/
+.git/
+scraped_data/
+startup_ideas.json
+startup_ideas.csv
+startup_ideas_report.txt
