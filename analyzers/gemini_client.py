@@ -165,17 +165,18 @@ class GeminiClient:
                 self._client = genai.Client(api_key=config.gemini_api_key)
                 logger.info("Using google.genai package (newer)")
             except ImportError:
-                raise ImportError(
-                    "No Gemini API package found. Install with: pip install google-generativeai"
-                )
+                logger.warning("No Gemini API package found. Gemini features will be disabled.")
+                self._genai = None
+                self._client = None
 
-        # Try to find a working model with better error handling
-        self.model = self._find_working_model()
-        if self.model is None:
-            raise ValueError(
-                "No available Gemini model found. "
-                "Please check your API key and internet connection."
-            )
+
+        if self._genai or self._client:
+            # Try to find a working model with better error handling
+            self.model = self._find_working_model()
+            if self.model is None:
+                logger.warning("No available Gemini model found.")
+        else:
+            self.model = None
 
         # System prompt for analyzing startup pain points
         self.system_prompt = """You are an expert startup consultant and business analyst. Your task is to analyze Reddit posts where people discuss problems, frustrations, or needs.

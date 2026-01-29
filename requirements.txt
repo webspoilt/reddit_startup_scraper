@@ -9,8 +9,7 @@
 # Get API key: https://console.groq.com/
 groq>=0.4.0
 
-# Google Generative AI (Gemini API - paid but reliable)
-google-generativeai>=0.8.0
+
 
 # ============================================================================
 # CORE DEPENDENCIES
@@ -20,7 +19,7 @@ google-generativeai>=0.8.0
 python-dotenv>=1.0.0
 
 # Data Handling
-pandas>=2.0.0
+
 
 # Progress Bars
 tqdm>=4.65.0

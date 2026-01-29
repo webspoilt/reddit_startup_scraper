@@ -167,8 +167,6 @@ class OutputManager:
         Returns:
             Path to the saved file.
         """
-        import pandas as pd
-
         if filename is None:
             timestamp = self._generate_timestamp()
             filename = f"startup_ideas_{timestamp}.csv"
@@ -183,11 +181,12 @@ class OutputManager:
             else:
                 data.append(asdict(analysis))
 
-        # Create DataFrame and save to CSV
-        df = pd.DataFrame(data)
+        if not data:
+            logger.warning("No data to save to CSV")
+            return filepath
 
-        # Reorder columns for better readability
-        column_order = [
+        # Define column order
+        fieldnames = [
             "original_title",
             "subreddit",
             "core_problem_summary",
@@ -202,14 +201,17 @@ class OutputManager:
             "analysis_timestamp",
         ]
 
-        # Only include columns that exist
-        existing_columns = [col for col in column_order if col in df.columns]
-        df = df[existing_columns]
+        # Write to CSV
+        try:
+            with open(filepath, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
+                writer.writeheader()
+                writer.writerows(data)
 
-        df.to_csv(filepath, index=False, encoding="utf-8")
-
-        self.generated_files.append(filepath)
-        logger.info(f"Saved CSV report to {filepath}")
+            self.generated_files.append(filepath)
+            logger.info(f"Saved CSV report to {filepath}")
+        except Exception as e:
+            logger.error(f"Failed to save CSV: {e}")
 
         return filepath
 
